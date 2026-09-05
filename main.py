@@ -10,6 +10,11 @@ templates = Jinja2Templates(directory="templates")
 def get_connection():
     return psycopg2.connect(dbname="bmac", user="hazma", host="localhost")
 
+@app.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    return templates.TemplateResponse("home.html", {"request": request})
+
+
 @app.post("/materials")
 def create_material(material_id: str, chemistry: str, supplier: str):
     material_id = material_id.strip()
