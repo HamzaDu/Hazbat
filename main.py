@@ -113,6 +113,43 @@ def create_coating(coating_id: str, material_id: str, project: str, made_by: str
     conn.close()
     return {"status": "created", "coating_id": coating_id}
 
+@app.get("/coatings/new", response_class=HTMLResponse)
+def new_coating_form(request: Request):
+    return templates.TemplateResponse("new_coating.html", {"request": request})
+
+
+@app.post("/coatings/new", response_class=HTMLResponse)
+def submit_coating_form(request: Request, coating_id: str = Form(...), material_id: str = Form(...), project: str = Form(...), made_by: str = Form(...)):
+    coating_id = coating_id.strip()
+    material_id = material_id.strip()
+    project = project.strip()
+    made_by = made_by.strip()
+
+    error = None
+    success = None
+
+    if not coating_id or not material_id or not project or not made_by:
+        error = "All fields are required and cannot be blank."
+    elif coating_id != coating_id.upper():
+        error = f"Coating ID must be uppercase. Try: {coating_id.upper()}"
+    else:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "INSERT INTO tbl_coating (coating_id, material_id, project, made_by) VALUES (%s, %s, %s, %s)",
+                (coating_id, material_id, project, made_by)
+            )
+            conn.commit()
+            success = coating_id
+        except Exception as e:
+            conn.rollback()
+            error = str(e)
+        cur.close()
+        conn.close()
+
+    return templates.TemplateResponse("new_coating.html", {"request": request, "error": error, "success": success})
+
 @app.post("/slp")
 def create_slp(slp_id: str, coating_id: str, project: str, made_by: str):
     slp_id = slp_id.strip()
