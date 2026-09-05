@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Form
 import psycopg2
 from fastapi import Request
 from fastapi.responses import HTMLResponse
@@ -14,6 +14,42 @@ def get_connection():
 def home(request: Request):
     return templates.TemplateResponse("home.html", {"request": request})
 
+@app.get("/materials/new", response_class=HTMLResponse)
+def new_material_form(request: Request):
+    return templates.TemplateResponse("new_material.html", {"request": request})
+    
+@app.post("/materials/new", response_class=HTMLResponse)
+def submit_material_form(request: Request, material_id: str = Form(...), chemistry: str = Form(...), supplier: str = Form(...)):
+    material_id = material_id.strip()
+    chemistry = chemistry.strip()
+    supplier = supplier.strip()
+
+    error = None
+    success = None
+
+    if not material_id or not chemistry or not supplier:
+        error = "All fields are required and cannot be blank."
+    elif material_id != material_id.upper():
+        error = f"Material ID must be uppercase. Try: {material_id.upper()}"
+    elif not (material_id.startswith("CAT-") or material_id.startswith("AN-")):
+        error = "Material ID must start with 'CAT-' or 'AN-'."
+    else:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "INSERT INTO tbl_materials (material_id, chemistry, supplier) VALUES (%s, %s, %s)",
+                (material_id, chemistry, supplier)
+            )
+            conn.commit()
+            success = material_id
+        except Exception as e:
+            conn.rollback()
+            error = str(e)
+        cur.close()
+        conn.close()
+
+    return templates.TemplateResponse("new_material.html", {"request": request, "error": error, "success": success})
 
 @app.post("/materials")
 def create_material(material_id: str, chemistry: str, supplier: str):
