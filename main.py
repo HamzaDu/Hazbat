@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Request, Form
 import psycopg2
 import bcrypt
-from fastapi import Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import JSONResponse
@@ -9,7 +8,7 @@ import pandas as pd
 from fastapi import UploadFile, File
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import RedirectResponse
-
+ 
  
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="dev-secret-change-this-later")
@@ -18,16 +17,27 @@ templates = Jinja2Templates(directory="templates")
 def get_connection():
     return psycopg2.connect(dbname="bmac", user="hazma", host="localhost")
  
+def require_login(request: Request):
+    if not request.session.get("user_id"):
+        return RedirectResponse(url="/login", status_code=303)
+    return None
+ 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     return templates.TemplateResponse("home.html", {"request": request})
  
 @app.get("/materials/new", response_class=HTMLResponse)
 def new_material_form(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     return templates.TemplateResponse("new_material.html", {"request": request})
-    
+ 
 @app.post("/materials/new", response_class=HTMLResponse)
 def submit_material_form(request: Request, material_id: str = Form(...), chemistry: str = Form(...), supplier: str = Form(...)):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     material_id = material_id.strip()
     chemistry = chemistry.strip()
     supplier = supplier.strip()
@@ -123,11 +133,17 @@ def create_coating(coating_id: str, material_id: str, project: str, made_by: str
  
 @app.get("/coatings/new", response_class=HTMLResponse)
 def new_coating_form(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     return templates.TemplateResponse("new_coating.html", {"request": request})
  
  
 @app.post("/coatings/new", response_class=HTMLResponse)
 def submit_coating_form(request: Request, coating_id: str = Form(...), material_id: str = Form(...), project: str = Form(...), made_by: str = Form(...)):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     coating_id = coating_id.strip()
     material_id = material_id.strip()
     project = project.strip()
@@ -187,13 +203,19 @@ def create_slp(slp_id: str, coating_id: str, project: str, made_by: str):
     cur.close()
     conn.close()
     return {"status": "created", "slp_id": slp_id}
+ 
 @app.get("/slp/new", response_class=HTMLResponse)
 def new_slp_form(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     return templates.TemplateResponse("new_slp.html", {"request": request})
- 
  
 @app.post("/slp/new", response_class=HTMLResponse)
 def submit_slp_form(request: Request, slp_id: str = Form(...), coating_id: str = Form(...), project: str = Form(...), made_by: str = Form(...), formation_capacity: str = Form(None)):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     slp_id = slp_id.strip()
     coating_id = coating_id.strip()
     project = project.strip()
@@ -256,11 +278,17 @@ def create_coincell(coincell_id: str, coating_id: str, project: str, made_by: st
  
 @app.get("/coincell/new", response_class=HTMLResponse)
 def new_coincell_form(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     return templates.TemplateResponse("new_coincell.html", {"request": request})
  
  
 @app.post("/coincell/new", response_class=HTMLResponse)
 def submit_coincell_form(request: Request, coincell_id: str = Form(...), coating_id: str = Form(...), project: str = Form(...), made_by: str = Form(...)):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     coincell_id = coincell_id.strip()
     coating_id = coating_id.strip()
     project = project.strip()
@@ -320,13 +348,20 @@ def create_mlp(mlp_id: str, cat_coating_id: str, an_coating_id: str, project: st
     cur.close()
     conn.close()
     return {"status": "created", "mlp_id": mlp_id}
+ 
 @app.get("/mlp/new", response_class=HTMLResponse)
 def new_mlp_form(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     return templates.TemplateResponse("new_mlp.html", {"request": request})
  
  
 @app.post("/mlp/new", response_class=HTMLResponse)
 def submit_mlp_form(request: Request, mlp_id: str = Form(...), cat_coating_id: str = Form(...), an_coating_id: str = Form(...), project: str = Form(...)):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     mlp_id = mlp_id.strip()
     cat_coating_id = cat_coating_id.strip()
     an_coating_id = an_coating_id.strip()
@@ -420,7 +455,6 @@ def directory(request: Request, record_id: str = None):
                 cur.execute("SELECT material_id FROM tbl_coating WHERE coating_id = %s", (record["coating_id"],))
                 mat = cur.fetchone()
                 record["_chain"] = [f"Coating: {record['coating_id']}", f"Material: {mat[0] if mat else '?'}"]
- 
  
         elif record_type == "coincell":
             cur.execute(
@@ -595,11 +629,17 @@ def formation_capacity_page(request: Request):
  
 @app.get("/materials/bulk-upload", response_class=HTMLResponse)
 def bulk_upload_form(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     return templates.TemplateResponse("bulk_upload.html", {"request": request})
  
  
 @app.post("/materials/bulk-upload", response_class=HTMLResponse)
 async def bulk_upload_materials(request: Request, file: UploadFile = File(...)):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     contents = await file.read()
  
     if file.filename.endswith(".csv"):
@@ -653,11 +693,17 @@ async def bulk_upload_materials(request: Request, file: UploadFile = File(...)):
  
 @app.get("/coatings/bulk-upload", response_class=HTMLResponse)
 def bulk_upload_coating_form(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     return templates.TemplateResponse("bulk_upload_coating.html", {"request": request})
  
  
 @app.post("/coatings/bulk-upload", response_class=HTMLResponse)
 async def bulk_upload_coatings(request: Request, file: UploadFile = File(...)):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     contents = await file.read()
  
     if file.filename.endswith(".csv"):
@@ -708,11 +754,17 @@ async def bulk_upload_coatings(request: Request, file: UploadFile = File(...)):
  
 @app.get("/slp/bulk-upload", response_class=HTMLResponse)
 def bulk_upload_slp_form(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     return templates.TemplateResponse("bulk_upload_slp.html", {"request": request})
  
  
 @app.post("/slp/bulk-upload", response_class=HTMLResponse)
 async def bulk_upload_slp(request: Request, file: UploadFile = File(...)):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     contents = await file.read()
     df = pd.read_csv(pd.io.common.BytesIO(contents)) if file.filename.endswith(".csv") else pd.read_excel(pd.io.common.BytesIO(contents))
  
@@ -758,11 +810,17 @@ async def bulk_upload_slp(request: Request, file: UploadFile = File(...)):
  
 @app.get("/coincell/bulk-upload", response_class=HTMLResponse)
 def bulk_upload_coincell_form(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     return templates.TemplateResponse("bulk_upload_coincell.html", {"request": request})
  
  
 @app.post("/coincell/bulk-upload", response_class=HTMLResponse)
 async def bulk_upload_coincell(request: Request, file: UploadFile = File(...)):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     contents = await file.read()
     df = pd.read_csv(pd.io.common.BytesIO(contents)) if file.filename.endswith(".csv") else pd.read_excel(pd.io.common.BytesIO(contents))
  
@@ -802,11 +860,17 @@ async def bulk_upload_coincell(request: Request, file: UploadFile = File(...)):
  
 @app.get("/mlp/bulk-upload", response_class=HTMLResponse)
 def bulk_upload_mlp_form(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     return templates.TemplateResponse("bulk_upload_mlp.html", {"request": request})
  
  
 @app.post("/mlp/bulk-upload", response_class=HTMLResponse)
 async def bulk_upload_mlp(request: Request, file: UploadFile = File(...)):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     contents = await file.read()
     df = pd.read_csv(pd.io.common.BytesIO(contents)) if file.filename.endswith(".csv") else pd.read_excel(pd.io.common.BytesIO(contents))
  
@@ -847,8 +911,8 @@ async def bulk_upload_mlp(request: Request, file: UploadFile = File(...)):
 @app.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
-
-
+ 
+ 
 @app.post("/login", response_class=HTMLResponse)
 def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
     conn = get_connection()
@@ -857,18 +921,19 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
     user = cur.fetchone()
     cur.close()
     conn.close()
-
+ 
     if not user or not bcrypt.checkpw(password.encode(), user[1].encode()):
         return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid username or password."})
-
+ 
     request.session["user_id"] = user[0]
     request.session["full_name"] = user[2]
     request.session["is_admin"] = user[3]
-
+ 
     return RedirectResponse(url="/", status_code=303)
-
-
+ 
+ 
 @app.get("/logout")
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/", status_code=303)
+ 
