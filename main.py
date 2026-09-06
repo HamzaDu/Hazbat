@@ -1,13 +1,18 @@
 from fastapi import FastAPI, Request, Form
 import psycopg2
+import bcrypt
 from fastapi import Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import JSONResponse
 import pandas as pd
 from fastapi import UploadFile, File
+from starlette.middleware.sessions import SessionMiddleware
+from fastapi.responses import RedirectResponse
+
  
 app = FastAPI()
+app.add_middleware(SessionMiddleware, secret_key="dev-secret-change-this-later")
 templates = Jinja2Templates(directory="templates")
  
 def get_connection():
@@ -839,3 +844,31 @@ async def bulk_upload_mlp(request: Request, file: UploadFile = File(...)):
     conn.close()
     return templates.TemplateResponse("bulk_upload_mlp.html", {"request": request, "results": {"success": success, "failed": failed}})
  
+@app.get("/login", response_class=HTMLResponse)
+def login_form(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.post("/login", response_class=HTMLResponse)
+def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT user_id, password_hash, full_name, is_admin FROM tbl_users WHERE username = %s", (username,))
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not user or not bcrypt.checkpw(password.encode(), user[1].encode()):
+        return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid username or password."})
+
+    request.session["user_id"] = user[0]
+    request.session["full_name"] = user[2]
+    request.session["is_admin"] = user[3]
+
+    return RedirectResponse(url="/", status_code=303)
+
+
+@app.get("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/", status_code=303)

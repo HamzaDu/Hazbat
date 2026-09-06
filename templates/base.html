@@ -21,7 +21,7 @@
 </head>
 <body>
     <nav>
-            <nav>
+                    <nav>
         <span class="brand">BMAC</span>
         <a href="/">Home</a>
         <a href="/directory">Directory</a>
@@ -30,8 +30,14 @@
         <a href="/inventory/slp">SLP</a>
         <a href="/inventory/coincell">Coin Cells</a>
         <a href="/inventory/mlp">MLP</a>
-        <a href="/materials/new">+ New</a>
-        <a href="/materials/bulk-upload">Bulk Upload</a>
+        <a href="/chart/formation-capacity">Chart</a>
+        <span style="margin-left: auto;"></span>
+        {% if request.session.get('user_id') %}
+        <span style="color: #ccc;">{{ request.session.get('full_name') }}</span>
+        <a href="/logout">Logout</a>
+        {% else %}
+        <a href="/login">Login</a>
+        {% endif %}
     </nav>
     </nav>
     <main>
