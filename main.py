@@ -179,6 +179,42 @@ def create_slp(slp_id: str, coating_id: str, project: str, made_by: str):
     cur.close()
     conn.close()
     return {"status": "created", "slp_id": slp_id}
+@app.get("/slp/new", response_class=HTMLResponse)
+def new_slp_form(request: Request):
+    return templates.TemplateResponse("new_slp.html", {"request": request})
+
+
+@app.post("/slp/new", response_class=HTMLResponse)
+def submit_slp_form(request: Request, slp_id: str = Form(...), coating_id: str = Form(...), project: str = Form(...), made_by: str = Form(...)):
+    slp_id = slp_id.strip()
+    coating_id = coating_id.strip()
+    project = project.strip()
+    made_by = made_by.strip()
+
+    error = None
+    success = None
+
+    if not slp_id or not coating_id or not project or not made_by:
+        error = "All fields are required and cannot be blank."
+    elif slp_id != slp_id.upper():
+        error = f"SLP ID must be uppercase. Try: {slp_id.upper()}"
+    else:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "INSERT INTO tbl_slp (slp_id, coating_id, project, made_by) VALUES (%s, %s, %s, %s)",
+                (slp_id, coating_id, project, made_by)
+            )
+            conn.commit()
+            success = slp_id
+        except Exception as e:
+            conn.rollback()
+            error = str(e)
+        cur.close()
+        conn.close()
+
+    return templates.TemplateResponse("new_slp.html", {"request": request, "error": error, "success": success})
 
 @app.post("/coincell")
 def create_coincell(coincell_id: str, coating_id: str, project: str, made_by: str):
