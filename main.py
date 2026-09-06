@@ -4,6 +4,8 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import JSONResponse
+import pandas as pd
+from fastapi import UploadFile, File
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -569,3 +571,61 @@ def chart_formation_capacity():
 @app.get("/chart/formation-capacity", response_class=HTMLResponse)
 def formation_capacity_page(request: Request):
     return templates.TemplateResponse("chart.html", {"request": request})
+
+@app.get("/materials/bulk-upload", response_class=HTMLResponse)
+def bulk_upload_form(request: Request):
+    return templates.TemplateResponse("bulk_upload.html", {"request": request})
+
+
+@app.post("/materials/bulk-upload", response_class=HTMLResponse)
+async def bulk_upload_materials(request: Request, file: UploadFile = File(...)):
+    contents = await file.read()
+
+    if file.filename.endswith(".csv"):
+        df = pd.read_csv(pd.io.common.BytesIO(contents))
+    else:
+        df = pd.read_excel(pd.io.common.BytesIO(contents))
+
+    success = []
+    failed = []
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    for i, row in df.iterrows():
+        row_num = i + 2  # +2 accounts for the header row and 0-indexing
+
+        material_id = str(row.get("material_id", "")).strip()
+        chemistry = str(row.get("chemistry", "")).strip()
+        supplier = str(row.get("supplier", "")).strip()
+
+        if not material_id or not chemistry or not supplier or material_id == "nan":
+            failed.append({"row": row_num, "reason": "Missing required field(s)."})
+            continue
+
+        if material_id != material_id.upper():
+            failed.append({"row": row_num, "reason": f"'{material_id}' is not uppercase."})
+            continue
+
+        if not (material_id.startswith("CAT-") or material_id.startswith("AN-")):
+            failed.append({"row": row_num, "reason": f"'{material_id}' must start with CAT- or AN-."})
+            continue
+
+        try:
+            cur.execute(
+                "INSERT INTO tbl_materials (material_id, chemistry, supplier) VALUES (%s, %s, %s)",
+                (material_id, chemistry, supplier)
+            )
+            conn.commit()
+            success.append(material_id)
+        except Exception as e:
+            conn.rollback()
+            failed.append({"row": row_num, "reason": str(e)})
+
+    cur.close()
+    conn.close()
+
+    return templates.TemplateResponse(
+        "bulk_upload.html",
+        {"request": request, "results": {"success": success, "failed": failed}}
+    )

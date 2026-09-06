@@ -1,0 +1,6 @@
+material_id,chemistry,supplier
+CAT-NMC-005,NMC 811,Targrey
+cat-lmfp-002,LMFP,HCM
+AN-GR-002,Graphite,BTR
+,Missing ID,Nowhere
+CAT-NMC-005,Duplicate,Targrey
