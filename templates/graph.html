@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Traceability Graph — BMAC{% endblock %}
+{% block content %}
+<h1>Traceability Graph</h1>
+<p style="color: #777; font-size: 14px;">Drag nodes, scroll to zoom, hover for details.</p>
+
+<div id="network" style="width: 100%; height: 650px; background: #0a0e1a; border-radius: 14px; margin-top: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);"></div>
+
+<script>
+    fetch('/api/graph')
+        .then(res => res.json())
+        .then(data => {
+            const groupColors = {
+                material:  { background: '#00e5ff', border: '#00b8cc', font: { color: '#00e5ff' } },
+                coating:   { background: '#7c4dff', border: '#5c35cc', font: { color: '#7c4dff' } },
+                slp:       { background: '#00ff9d', border: '#00cc7d', font: { color: '#00ff9d' } },
+                coincell:  { background: '#ff6ec7', border: '#cc5599', font: { color: '#ff6ec7' } },
+                mlp:       { background: '#ffb800', border: '#cc9300', font: { color: '#ffb800' } }
+            };
+
+            const nodes = new vis.DataSet(data.nodes.map(n => ({
+                ...n,
+                shape: 'dot',
+                size: 14,
+                color: { background: groupColors[n.group].background, border: groupColors[n.group].border },
+                font: { color: '#e8e8f0', size: 12 },
+                shadow: { enabled: true, color: groupColors[n.group].background, size: 12, x: 0, y: 0 }
+            })));
+
+            const edges = new vis.DataSet(data.edges.map(e => ({
+                ...e,
+                color: { color: 'rgba(120,140,200,0.35)', highlight: '#00e5ff' },
+                width: 1.5,
+                smooth: { type: 'cubicBezier', roundness: 0.4 }
+            })));
+
+            const container = document.getElementById('network');
+            const network = new vis.Network(container, { nodes, edges }, {
+                layout: {
+                    hierarchical: {
+                        direction: 'LR',
+                        sortMethod: 'directed',
+                        levelSeparation: 160,
+                        nodeSpacing: 60
+                    }
+                },
+                physics: { hierarchicalRepulsion: { nodeDistance: 100 } },
+                interaction: { hover: true, tooltipDelay: 100 }
+            });
+        });
+</script>
+{% endblock %}

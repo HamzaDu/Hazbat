@@ -1033,4 +1033,91 @@ def view_card(request: Request, record_id: str):
         {"request": request, "record_id": record_id, "record_type": record_type,
          "record": record, "chain": chain, "qr_base64": qr_base64}
     )
- 
+
+@app.get("/api/chart/gsm-by-coating")
+def chart_gsm():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT coating_id, coat_weight_gsm FROM tbl_coating WHERE coat_weight_gsm IS NOT NULL ORDER BY coating_id")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return JSONResponse({"labels": [r[0] for r in rows], "values": [float(r[1]) for r in rows]})
+
+
+@app.get("/api/chart/records-per-table")
+def chart_records_per_table():
+    conn = get_connection()
+    cur = conn.cursor()
+    counts = {}
+    for label, table in [("Materials", "tbl_materials"), ("Coatings", "tbl_coating"),
+                          ("SLP", "tbl_slp"), ("Coin Cells", "tbl_coincell"), ("MLP", "tbl_mlp")]:
+        cur.execute(f"SELECT COUNT(*) FROM {table}")
+        counts[label] = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    return JSONResponse({"labels": list(counts.keys()), "values": list(counts.values())})
+
+
+@app.get("/api/graph")
+def traceability_graph():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    nodes = []
+    edges = []
+    seen_projects = set()
+
+    def add_project_node(project_name):
+        if project_name and project_name not in seen_projects:
+            nodes.append({"id": f"PROJECT-{project_name}", "label": project_name, "group": "project"})
+            seen_projects.add(project_name)
+
+    cur.execute("SELECT material_id, chemistry FROM tbl_materials")
+    for mat_id, chem in cur.fetchall():
+        nodes.append({"id": mat_id, "label": mat_id, "group": "material", "title": chem or ""})
+
+    cur.execute("SELECT coating_id, material_id, project FROM tbl_coating")
+    for coat_id, mat_id, project in cur.fetchall():
+        nodes.append({"id": coat_id, "label": coat_id, "group": "coating"})
+        edges.append({"from": mat_id, "to": coat_id})
+        add_project_node(project)
+        if project:
+            edges.append({"from": coat_id, "to": f"PROJECT-{project}", "dashes": True})
+
+    cur.execute("SELECT slp_id, coating_id, project FROM tbl_slp")
+    for slp_id, coat_id, project in cur.fetchall():
+        nodes.append({"id": slp_id, "label": slp_id, "group": "slp"})
+        edges.append({"from": coat_id, "to": slp_id})
+        add_project_node(project)
+        if project:
+            edges.append({"from": slp_id, "to": f"PROJECT-{project}", "dashes": True})
+
+    cur.execute("SELECT coincell_id, coating_id, project FROM tbl_coincell")
+    for cc_id, coat_id, project in cur.fetchall():
+        nodes.append({"id": cc_id, "label": cc_id, "group": "coincell"})
+        edges.append({"from": coat_id, "to": cc_id})
+        add_project_node(project)
+        if project:
+            edges.append({"from": cc_id, "to": f"PROJECT-{project}", "dashes": True})
+
+    cur.execute("SELECT mlp_id, cat_coating_id, an_coating_id, project FROM tbl_mlp")
+    for mlp_id, cat_id, an_id, project in cur.fetchall():
+        nodes.append({"id": mlp_id, "label": mlp_id, "group": "mlp"})
+        edges.append({"from": cat_id, "to": mlp_id})
+        edges.append({"from": an_id, "to": mlp_id})
+        add_project_node(project)
+        if project:
+            edges.append({"from": mlp_id, "to": f"PROJECT-{project}", "dashes": True})
+
+    cur.close()
+    conn.close()
+    return JSONResponse({"nodes": nodes, "edges": edges})
+
+@app.get("/graph", response_class=HTMLResponse)
+def graph_page(request: Request):
+    return templates.TemplateResponse("graph.html", {"request": request})
+
+@app.get("/graph", response_class=HTMLResponse)
+def graph_page(request: Request):
+    return templates.TemplateResponse("graph.html", {"request": request})

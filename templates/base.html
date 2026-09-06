@@ -3,42 +3,86 @@
 <head>
     <title>{% block title %}BMAC{% endblock %}</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; }
-        nav { background: #1b3a6b; padding: 15px 30px; display: flex; gap: 20px; align-items: center; }
-        nav a { color: white; text-decoration: none; font-size: 14px; }
-        nav a:hover { text-decoration: underline; }
-        nav .brand { font-weight: bold; font-size: 18px; margin-right: 20px; }
-        main { max-width: 900px; margin: 40px auto; padding: 0 20px; }
-        label { display: block; margin-top: 15px; font-weight: bold; }
-        input { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
-        button { margin-top: 20px; padding: 10px 24px; background: #2e5fa3; color: white; border: none; border-radius: 6px; cursor: pointer; }
-        .error { color: #c62828; margin-top: 15px; }
-        .success { color: #2e7d32; margin-top: 15px; }
-        .result { margin-top: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 6px; }
-        .row { display: flex; justify-content: space-between; padding: 4px 0; }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    * { box-sizing: border-box; }
+    body {
+        font-family: -apple-system, 'Segoe UI', Arial, sans-serif;
+        margin: 0;
+        background: #f4f6fb;
+        color: #1a1a2e;
+    }
+    nav {
+        background: linear-gradient(135deg, #1b3a6b, #2e5fa3);
+        padding: 16px 32px;
+        display: flex;
+        gap: 22px;
+        align-items: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    }
+    nav a {
+        color: rgba(255,255,255,0.85);
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+        transition: color 0.15s;
+    }
+    nav a:hover { color: #fff; }
+    nav .brand {
+        font-weight: 800;
+        font-size: 19px;
+        color: white;
+        margin-right: 10px;
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+    }
+    nav .brand .by {
+        font-weight: 400;
+        font-size: 12px;
+        color: rgba(255,255,255,0.6);
+    }
+    main { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
+    label { display: block; margin-top: 15px; font-weight: 600; font-size: 13px; color: #444; }
+    input {
+        width: 100%; padding: 10px; margin-top: 6px; box-sizing: border-box;
+        border: 1px solid #dde2ee; border-radius: 8px; font-size: 14px;
+    }
+    input:focus { outline: none; border-color: #2e5fa3; box-shadow: 0 0 0 3px rgba(46,95,163,0.12); }
+    button {
+        margin-top: 20px; padding: 11px 26px; background: #2e5fa3; color: white;
+        border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px;
+        transition: background 0.15s;
+    }
+    button:hover { background: #1b3a6b; }
+    .error { color: #c62828; margin-top: 15px; }
+    .success { color: #2e7d32; margin-top: 15px; }
+    .result { margin-top: 20px; padding: 18px; background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f2f7; }
+    .row:last-child { border-bottom: none; }
+    .label { color: #777; font-size: 13px; }
+    .value { font-weight: 600; }
+</style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script><script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
     <nav>
-                    <nav>
-        <span class="brand">BMAC</span>
-        <a href="/">Home</a>
-        <a href="/directory">Directory</a>
-        <a href="/inventory/materials">Materials</a>
-        <a href="/inventory/coatings">Coatings</a>
-        <a href="/inventory/slp">SLP</a>
-        <a href="/inventory/coincell">Coin Cells</a>
-        <a href="/inventory/mlp">MLP</a>
-        <a href="/chart/formation-capacity">Chart</a>
-        <span style="margin-left: auto;"></span>
-        {% if request.session.get('user_id') %}
-        <span style="color: #ccc;">{{ request.session.get('full_name') }}</span>
-        <a href="/logout">Logout</a>
-        {% else %}
-        <a href="/login">Login</a>
-        {% endif %}
-    </nav>
+    <span class="brand">BMAC <span class="by">by HAZbat</span></span>
+    <a href="/">Home</a>
+    <a href="/directory">Directory</a>
+    <a href="/inventory/materials">Materials</a>
+    <a href="/inventory/coatings">Coatings</a>
+    <a href="/inventory/slp">SLP</a>
+    <a href="/inventory/coincell">Coin Cells</a>
+    <a href="/inventory/mlp">MLP</a>
+    <a href="/chart/formation-capacity">Chart</a>
+    <a href="/graph">Graph</a>
+    <span style="margin-left: auto;"></span>
+    {% if request.session.get('user_id') %}
+    <span style="color: rgba(255,255,255,0.7); font-size: 13px;">{{ request.session.get('full_name') }}</span>
+    <a href="/logout">Logout</a>
+    {% else %}
+    <a href="/login">Login</a>
+    {% endif %}
+</nav>
     </nav>
     <main>
         {% block content %}{% endblock %}
