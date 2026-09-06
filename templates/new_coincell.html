@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}New SLP Cell — BMAC{% endblock %}
+{% block title %}New Coin Cell — BMAC{% endblock %}
 {% block content %}
-<h1>New SLP Cell</h1>
-<form method="post" action="/slp/new">
-    <label>SLP ID</label>
-    <input type="text" name="slp_id" placeholder="e.g. CAT-NMC-001-C001-SLP-02" required>
+<h1>New Coin Cell</h1>
+<form method="post" action="/coincell/new">
+    <label>Coin Cell ID</label>
+    <input type="text" name="coincell_id" placeholder="e.g. CAT-NMC-001-C001-CC-02" required>
 
     <label>Coating ID</label>
     <input type="text" name="coating_id" placeholder="Must already exist" required>
@@ -15,7 +15,7 @@
     <label>Made By</label>
     <input type="text" name="made_by" required>
 
-    <button type="submit">Create SLP Cell</button>
+    <button type="submit">Create Coin Cell</button>
 </form>
 
 {% if error %}<p class="error">{{ error }}</p>{% endif %}

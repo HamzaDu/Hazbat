@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Inventory{% endblock %}
+{% block content %}
+<h1>{{ title }} Inventory</h1>
+<table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+    <thead>
+        <tr style="background: #f5f8fc; text-align: left;">
+            {% for col in columns %}
+            <th style="padding: 8px; border-bottom: 2px solid #ccc;">{{ col }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            {% for value in row %}
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ value if value is not none else "—" }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% if not rows %}
+<p>No records yet.</p>
+{% endif %}
+{% endblock %}

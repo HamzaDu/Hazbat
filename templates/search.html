@@ -1,42 +1,31 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>BMAC Directory</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; }
-        input { padding: 8px; width: 300px; }
-        button { padding: 8px 16px; }
-        .result { margin-top: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 6px; }
-        .row { display: flex; justify-content: space-between; padding: 4px 0; }
-    </style>
-</head>
-<body>
-    <h1>BMAC Directory</h1>
-    <form method="get" action="/directory">
-        <input type="text" name="record_id" placeholder="Enter an ID, e.g. CAT-NMC-001" value="{{ record_id or '' }}">
-        <button type="submit">Search</button>
-    </form>
+{% extends "base.html" %}
+{% block title %}BMAC — Directory{% endblock %}
+{% block content %}
+<h1>BMAC Directory</h1>
+<form method="get" action="/directory">
+    <input type="text" name="record_id" placeholder="Enter an ID, e.g. CAT-NMC-001" value="{{ record_id or '' }}">
+    <button type="submit">Search</button>
+</form>
 
-    {% if record %}
-    <div class="result">
-        <h2>{{ record_id }}</h2>
-                {% for key, value in record.items() %}
-        {% if key != '_chain' %}
-        <div class="row"><strong>{{ key }}</strong><span>{{ value }}</span></div>
-        {% endif %}
-        {% endfor %}
-
-        {% if record._chain %}
-        <h3>Traceability chain</h3>
-        <ul>
-            {% for link in record._chain %}
-            <li>{{ link }}</li>
-            {% endfor %}
-        </ul>
-        {% endif %}
-    </div>
-    {% elif searched %}
-    <p>No record found for "{{ record_id }}".</p>
+{% if record %}
+<div class="result">
+    <h2>{{ record_id }}</h2>
+    {% for key, value in record.items() %}
+    {% if key != '_chain' %}
+    <div class="row"><strong>{{ key }}</strong><span>{{ value }}</span></div>
     {% endif %}
-</body>
-</html>
+    {% endfor %}
+
+    {% if record._chain %}
+    <h3>Traceability chain</h3>
+    <ul>
+        {% for link in record._chain %}
+        <li>{{ link }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+{% elif searched %}
+<p>No record found for "{{ record_id }}".</p>
+{% endif %}
+{% endblock %}

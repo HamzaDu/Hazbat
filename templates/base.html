@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}BMAC{% endblock %}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; }
+        nav { background: #1b3a6b; padding: 15px 30px; display: flex; gap: 20px; align-items: center; }
+        nav a { color: white; text-decoration: none; font-size: 14px; }
+        nav a:hover { text-decoration: underline; }
+        nav .brand { font-weight: bold; font-size: 18px; margin-right: 20px; }
+        main { max-width: 900px; margin: 40px auto; padding: 0 20px; }
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        input { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
+        button { margin-top: 20px; padding: 10px 24px; background: #2e5fa3; color: white; border: none; border-radius: 6px; cursor: pointer; }
+        .error { color: #c62828; margin-top: 15px; }
+        .success { color: #2e7d32; margin-top: 15px; }
+        .result { margin-top: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 6px; }
+        .row { display: flex; justify-content: space-between; padding: 4px 0; }
+    </style>
+</head>
+<body>
+    <nav>
+            <nav>
+        <span class="brand">BMAC</span>
+        <a href="/">Home</a>
+        <a href="/directory">Directory</a>
+        <a href="/inventory/materials">Materials</a>
+        <a href="/inventory/coatings">Coatings</a>
+        <a href="/inventory/slp">SLP</a>
+        <a href="/inventory/coincell">Coin Cells</a>
+        <a href="/inventory/mlp">MLP</a>
+        <a href="/materials/new">+ New</a>
+    </nav>
+    </nav>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

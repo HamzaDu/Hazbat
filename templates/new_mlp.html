@@ -1,38 +1,23 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>New MLP Cell — BMAC</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 500px; margin: 40px auto; }
-        label { display: block; margin-top: 15px; font-weight: bold; }
-        input { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
-        button { margin-top: 20px; padding: 10px 24px; background: #2e5fa3; color: white; border: none; border-radius: 6px; cursor: pointer; }
-        .error { color: #c62828; margin-top: 15px; }
-        .success { color: #2e7d32; margin-top: 15px; }
-        a { display: inline-block; margin-top: 20px; }
-    </style>
-</head>
-<body>
-    <h1>New MLP Cell</h1>
-    <form method="post" action="/mlp/new">
-        <label>MLP ID</label>
-        <input type="text" name="mlp_id" placeholder="e.g. MLP-0002" required>
+{% extends "base.html" %}
+{% block title %}New MLP Cell — BMAC{% endblock %}
+{% block content %}
+<h1>New MLP Cell</h1>
+<form method="post" action="/mlp/new">
+    <label>MLP ID</label>
+    <input type="text" name="mlp_id" placeholder="e.g. MLP-0002" required>
 
-        <label>Cathode Coating ID</label>
-        <input type="text" name="cat_coating_id" placeholder="Must already exist" required>
+    <label>Cathode Coating ID</label>
+    <input type="text" name="cat_coating_id" placeholder="Must already exist" required>
 
-        <label>Anode Coating ID</label>
-        <input type="text" name="an_coating_id" placeholder="Must already exist" required>
+    <label>Anode Coating ID</label>
+    <input type="text" name="an_coating_id" placeholder="Must already exist" required>
 
-        <label>Project</label>
-        <input type="text" name="project" required>
+    <label>Project</label>
+    <input type="text" name="project" required>
 
-        <button type="submit">Create MLP Cell</button>
-    </form>
+    <button type="submit">Create MLP Cell</button>
+</form>
 
-    {% if error %}<p class="error">{{ error }}</p>{% endif %}
-    {% if success %}<p class="success">Created {{ success }} successfully.</p>{% endif %}
-
-    <a href="/">&larr; Back to home</a>
-</body>
-</html>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if success %}<p class="success">Created {{ success }} successfully.</p>{% endif %}
+{% endblock %}

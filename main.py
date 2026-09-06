@@ -474,3 +474,80 @@ def detect_record_type(record_id: str) -> str:
     if rid.startswith("CAT") or rid.startswith("AN"):
         return "material"
     return None
+
+@app.get("/inventory/materials", response_class=HTMLResponse)
+def inventory_materials(request: Request):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT material_id, chemistry, supplier, date_received, quantity_kg, location, availability "
+        "FROM tbl_materials ORDER BY material_id"
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    columns = ["Material ID", "Chemistry", "Supplier", "Date Received", "Quantity (kg)", "Location", "Availability"]
+    return templates.TemplateResponse(
+        "inventory.html",
+        {"request": request, "title": "Materials", "columns": columns, "rows": rows}
+    )
+
+@app.get("/inventory/coatings", response_class=HTMLResponse)
+def inventory_coatings(request: Request):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT coating_id, material_id, project, coating_date, made_by, coat_weight_gsm, porosity "
+        "FROM tbl_coating ORDER BY coating_id"
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    columns = ["Coating ID", "Material ID", "Project", "Coating Date", "Made By", "GSM", "Porosity"]
+    return templates.TemplateResponse("inventory.html", {"request": request, "title": "Coatings", "columns": columns, "rows": rows})
+
+
+@app.get("/inventory/slp", response_class=HTMLResponse)
+def inventory_slp(request: Request):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT slp_id, coating_id, project, date_made, made_by, electrolyte, formation_capacity "
+        "FROM tbl_slp ORDER BY slp_id"
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    columns = ["SLP ID", "Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity"]
+    return templates.TemplateResponse("inventory.html", {"request": request, "title": "SLP Cells", "columns": columns, "rows": rows})
+
+
+@app.get("/inventory/coincell", response_class=HTMLResponse)
+def inventory_coincell(request: Request):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT coincell_id, coating_id, project, date_made, made_by, electrolyte, formation_capacity "
+        "FROM tbl_coincell ORDER BY coincell_id"
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    columns = ["Coin Cell ID", "Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity"]
+    return templates.TemplateResponse("inventory.html", {"request": request, "title": "Coin Cells", "columns": columns, "rows": rows})
+
+
+@app.get("/inventory/mlp", response_class=HTMLResponse)
+def inventory_mlp(request: Request):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT mlp_id, cat_coating_id, an_coating_id, project, date_made, cell_capacity "
+        "FROM tbl_mlp ORDER BY mlp_id"
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    columns = ["MLP ID", "Cathode Coating", "Anode Coating", "Project", "Date Made", "Cell Capacity"]
+    return templates.TemplateResponse("inventory.html", {"request": request, "title": "MLP Cells", "columns": columns, "rows": rows})

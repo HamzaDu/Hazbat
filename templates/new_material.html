@@ -1,39 +1,20 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>New Material — BMAC</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 500px; margin: 40px auto; }
-        label { display: block; margin-top: 15px; font-weight: bold; }
-        input { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
-        button { margin-top: 20px; padding: 10px 24px; background: #2e5fa3; color: white; border: none; border-radius: 6px; cursor: pointer; }
-        .error { color: #c62828; margin-top: 15px; }
-        .success { color: #2e7d32; margin-top: 15px; }
-        a { display: inline-block; margin-top: 20px; }
-    </style>
-</head>
-<body>
-    <h1>New Material</h1>
-    <form method="post" action="/materials/new">
-        <label>Material ID</label>
-        <input type="text" name="material_id" placeholder="e.g. CAT-NMC-002" required>
+{% extends "base.html" %}
+{% block title %}New Material — BMAC{% endblock %}
+{% block content %}
+<h1>New Material</h1>
+<form method="post" action="/materials/new">
+    <label>Material ID</label>
+    <input type="text" name="material_id" placeholder="e.g. CAT-NMC-002" required>
 
-        <label>Chemistry</label>
-        <input type="text" name="chemistry" required>
+    <label>Chemistry</label>
+    <input type="text" name="chemistry" required>
 
-        <label>Supplier</label>
-        <input type="text" name="supplier" required>
+    <label>Supplier</label>
+    <input type="text" name="supplier" required>
 
-        <button type="submit">Create Material</button>
-    </form>
+    <button type="submit">Create Material</button>
+</form>
 
-    {% if error %}
-    <p class="error">{{ error }}</p>
-    {% endif %}
-    {% if success %}
-    <p class="success">Created {{ success }} successfully.</p>
-    {% endif %}
-
-    <a href="/">&larr; Back to home</a>
-</body>
-</html>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if success %}<p class="success">Created {{ success }} successfully.</p>{% endif %}
+{% endblock %}

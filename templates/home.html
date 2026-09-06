@@ -1,26 +1,6 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>BMAC</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto; text-align: center; }
-        h1 { margin-bottom: 10px; }
-        p { color: #555; }
-        .links { margin-top: 40px; display: flex; flex-direction: column; gap: 15px; align-items: center; }
-        a.button {
-            display: inline-block; padding: 12px 30px; background: #2e5fa3; color: white;
-            text-decoration: none; border-radius: 6px; width: 200px;
-        }
-        a.button:hover { background: #1b3a6b; }
-    </style>
-</head>
-<body>
-    <h1>BMAC</h1>
-    <p>Battery Materials and Cell Group &mdash; traceability database</p>
-
-    <div class="links">
-        <a class="button" href="/directory">Search the Directory</a>
-        <a class="button" href="/docs">Add a Record (API)</a>
-    </div>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}BMAC — Home{% endblock %}
+{% block content %}
+<h1>BMAC</h1>
+<p>Battery Materials and Cell Group &mdash; traceability database</p>
+{% endblock %}
