@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Formation Capacity — BMAC{% endblock %}
+{% block content %}
+<h1>Formation Capacity by SLP Cell</h1>
+<div style="max-width: 700px; margin-top: 20px;">
+    <canvas id="myChart"></canvas>
+</div>
+
+<script>
+    fetch('/api/chart/formation-capacity')
+        .then(response => response.json())
+        .then(data => {
+            new Chart(document.getElementById('myChart'), {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'Formation Capacity (mAh)',
+                        data: data.values,
+                        backgroundColor: '#2e5fa3'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'mAh' }
+                        }
+                    }
+                }
+            });
+        });
+</script>
+{% endblock %}

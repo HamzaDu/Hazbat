@@ -3,6 +3,7 @@ import psycopg2
 from fastapi import Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -185,7 +186,7 @@ def new_slp_form(request: Request):
 
 
 @app.post("/slp/new", response_class=HTMLResponse)
-def submit_slp_form(request: Request, slp_id: str = Form(...), coating_id: str = Form(...), project: str = Form(...), made_by: str = Form(...)):
+def submit_slp_form(request: Request, slp_id: str = Form(...), coating_id: str = Form(...), project: str = Form(...), made_by: str = Form(...), formation_capacity: str = Form(None)):
     slp_id = slp_id.strip()
     coating_id = coating_id.strip()
     project = project.strip()
@@ -203,8 +204,8 @@ def submit_slp_form(request: Request, slp_id: str = Form(...), coating_id: str =
         cur = conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO tbl_slp (slp_id, coating_id, project, made_by) VALUES (%s, %s, %s, %s)",
-                (slp_id, coating_id, project, made_by)
+                "INSERT INTO tbl_slp (slp_id, coating_id, project, made_by, formation_capacity) VALUES (%s, %s, %s, %s, %s)",
+                (slp_id, coating_id, project, made_by, formation_capacity if formation_capacity else None)
             )
             conn.commit()
             success = slp_id
@@ -551,3 +552,20 @@ def inventory_mlp(request: Request):
     conn.close()
     columns = ["MLP ID", "Cathode Coating", "Anode Coating", "Project", "Date Made", "Cell Capacity"]
     return templates.TemplateResponse("inventory.html", {"request": request, "title": "MLP Cells", "columns": columns, "rows": rows})
+
+@app.get("/api/chart/formation-capacity")
+def chart_formation_capacity():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT slp_id, formation_capacity FROM tbl_slp WHERE formation_capacity IS NOT NULL ORDER BY slp_id")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    labels = [r[0] for r in rows]
+    values = [float(r[1]) for r in rows]
+    return JSONResponse({"labels": labels, "values": values})
+
+@app.get("/chart/formation-capacity", response_class=HTMLResponse)
+def formation_capacity_page(request: Request):
+    return templates.TemplateResponse("chart.html", {"request": request})

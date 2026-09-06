@@ -15,7 +15,11 @@
     <label>Made By</label>
     <input type="text" name="made_by" required>
 
+    <label>Formation Capacity (mAh)</label>
+    <input type="number" step="0.1" name="formation_capacity">
+
     <button type="submit">Create SLP Cell</button>
+
 </form>
 
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
