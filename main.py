@@ -8,8 +8,11 @@ import pandas as pd
 from fastapi import UploadFile, File
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import RedirectResponse
+import qrcode
+import io
+import base64
  
- 
+BASE_URL = "http://127.0.0.1:8000"
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="dev-secret-change-this-later")
 templates = Jinja2Templates(directory="templates")
@@ -936,4 +939,98 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/", status_code=303)
+
+@app.get("/card/{record_id}", response_class=HTMLResponse)
+def view_card(request: Request, record_id: str):
+    record_type = detect_record_type(record_id)
+    if not record_type:
+        return HTMLResponse("Unrecognised ID format.", status_code=404)
+
+    # Generate the QR code for THIS card's own URL
+    card_url = f"{BASE_URL}/card/{record_id}"
+    qr_img = qrcode.make(card_url)
+    buf = io.BytesIO()
+    qr_img.save(buf, format="PNG")
+    qr_base64 = base64.b64encode(buf.getvalue()).decode()
+
+    # Reuse the same lookup logic as /directory
+    conn = get_connection()
+    cur = conn.cursor()
+
+    record = None
+    chain = []
+
+    if record_type == "coating":
+        cur.execute(
+            "SELECT material_id, project, coating_date, made_by, coat_weight_gsm, porosity "
+            "FROM tbl_coating WHERE coating_id = %s", (record_id,)
+        )
+        row = cur.fetchone()
+        if row:
+            columns = ["Material ID", "Project", "Coating Date", "Made By", "GSM", "Porosity"]
+            record = dict(zip(columns, row))
+            cur.execute("SELECT slp_id FROM tbl_slp WHERE coating_id = %s", (record_id,))
+            chain += [f"SLP: {r[0]}" for r in cur.fetchall()]
+            cur.execute("SELECT coincell_id FROM tbl_coincell WHERE coating_id = %s", (record_id,))
+            chain += [f"CoinCell: {r[0]}" for r in cur.fetchall()]
+            cur.execute("SELECT mlp_id FROM tbl_mlp WHERE cat_coating_id = %s OR an_coating_id = %s", (record_id, record_id))
+            chain += [f"MLP: {r[0]}" for r in cur.fetchall()]
+
+    elif record_type == "material":
+        cur.execute(
+            "SELECT chemistry, supplier, date_received, quantity_kg, location, availability "
+            "FROM tbl_materials WHERE material_id = %s", (record_id,)
+        )
+    elif record_type == "slp":
+        cur.execute(
+            "SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity "
+            "FROM tbl_slp WHERE slp_id = %s", (record_id,)
+        )
+        row = cur.fetchone()
+        if row:
+            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity"]
+            record = dict(zip(columns, row))
+            chain.append(f"Coating: {record['Coating ID']}")
+
+    elif record_type == "coincell":
+        cur.execute(
+            "SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity "
+            "FROM tbl_coincell WHERE coincell_id = %s", (record_id,)
+        )
+        row = cur.fetchone()
+        if row:
+            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity"]
+            record = dict(zip(columns, row))
+            chain.append(f"Coating: {record['Coating ID']}")
+
+    elif record_type == "mlp":
+        cur.execute(
+            "SELECT cat_coating_id, an_coating_id, project, date_made, cell_capacity "
+            "FROM tbl_mlp WHERE mlp_id = %s", (record_id,)
+        )
+        row = cur.fetchone()
+        if row:
+            columns = ["Cathode Coating", "Anode Coating", "Project", "Date Made", "Cell Capacity"]
+            record = dict(zip(columns, row))
+            chain.append(f"Cathode: {record['Cathode Coating']}")
+            chain.append(f"Anode: {record['Anode Coating']}")
+        
+        row = cur.fetchone()
+        if row:
+            columns = ["Chemistry", "Supplier", "Date Received", "Quantity (kg)", "Location", "Availability"]
+            record = dict(zip(columns, row))
+            cur.execute("SELECT coating_id FROM tbl_coating WHERE material_id = %s", (record_id,))
+            chain += [f"Coating: {r[0]}" for r in cur.fetchall()]
+
+    cur.close()
+    conn.close()
+
+    if not record:
+        return HTMLResponse("Record not found.", status_code=404)
+
+    return templates.TemplateResponse(
+        "card.html",
+        {"request": request, "record_id": record_id, "record_type": record_type,
+         "record": record, "chain": chain, "qr_base64": qr_base64}
+    )
  

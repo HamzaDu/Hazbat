@@ -14,11 +14,15 @@
             {% endfor %}
         </tr>
     </thead>
-    <tbody>
+      <tbody>
         {% for row in rows %}
         <tr>
             {% for value in row %}
+            {% if loop.first %}
+            <td style="padding: 8px; border-bottom: 1px solid #eee;"><a href="/card/{{ value }}">{{ value }}</a></td>
+            {% else %}
             <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ value if value is not none else "—" }}</td>
+            {% endif %}
             {% endfor %}
         </tr>
         {% endfor %}

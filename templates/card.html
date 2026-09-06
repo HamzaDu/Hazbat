@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ record_id }} — Card{% endblock %}
+{% block content %}
+<div style="max-width: 420px; margin: 0 auto; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.15);">
+    <div style="background: linear-gradient(135deg, #1b3a6b, #2e5fa3); color: white; padding: 24px;">
+        <h1 style="margin: 0; font-size: 24px;">{{ record_id }}</h1>
+        <p style="margin: 5px 0 0; font-size: 14px; opacity: 0.85;">{{ record_type | capitalize }}</p>
+    </div>
+
+    <div style="padding: 22px; background: white;">
+        {% for key, value in record.items() %}
+        <div class="row"><span class="label">{{ key }}</span><span class="value">{{ value if value is not none else "—" }}</span></div>
+        {% endfor %}
+    </div>
+
+    {% if chain %}
+    <div style="background: #f5f8fc; padding: 10px 22px; font-size: 13px; font-weight: 700; color: #1b3a6b;">
+        Traceability chain
+    </div>
+    <div style="padding: 16px 22px; background: white;">
+        {% for link in chain %}
+        <div style="padding: 4px 0; font-size: 14px;">{{ link }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div style="padding: 20px; background: #f7f7f7; text-align: center;">
+        <img src="data:image/png;base64,{{ qr_base64 }}" alt="QR code for {{ record_id }}" style="width: 140px; height: 140px;">
+        <p style="font-size: 11px; color: #999; margin-top: 8px;">Scan to open this card</p>
+    </div>
+</div>
+{% endblock %}
