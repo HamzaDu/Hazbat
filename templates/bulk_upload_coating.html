@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Bulk Upload Coatings — BMAC{% endblock %}
+{% block content %}
+<h1>Bulk Upload Coatings</h1>
+<p>Upload a CSV or Excel file with columns: <strong>coating_id, material_id, project, made_by</strong></p>
+
+<form method="post" action="/coatings/bulk-upload" enctype="multipart/form-data">
+    <label>File</label>
+    <input type="file" name="file" accept=".csv,.xlsx,.xls" required>
+    <button type="submit">Upload</button>
+</form>
+
+{% if results %}
+<div class="result">
+    <h3>Results</h3>
+    <p>Successfully created: {{ results.success|length }}</p>
+    <p>Failed: {{ results.failed|length }}</p>
+
+    {% if results.failed %}
+    <h4>Failures</h4>
+    <ul>
+        {% for fail in results.failed %}
+        <li>Row {{ fail.row }}: {{ fail.reason }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -2,6 +2,10 @@
 {% block title %}{{ title }} — Inventory{% endblock %}
 {% block content %}
 <h1>{{ title }} Inventory</h1>
+<p>
+    <a href="{{ new_url }}">+ New</a> &nbsp;|&nbsp;
+    <a href="{{ bulk_url }}">Bulk Upload</a>
+</p>
 <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
     <thead>
         <tr style="background: #f5f8fc; text-align: left;">
