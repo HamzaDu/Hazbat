@@ -246,6 +246,43 @@ def create_coincell(coincell_id: str, coating_id: str, project: str, made_by: st
     conn.close()
     return {"status": "created", "coincell_id": coincell_id}
 
+@app.get("/coincell/new", response_class=HTMLResponse)
+def new_coincell_form(request: Request):
+    return templates.TemplateResponse("new_coincell.html", {"request": request})
+
+
+@app.post("/coincell/new", response_class=HTMLResponse)
+def submit_coincell_form(request: Request, coincell_id: str = Form(...), coating_id: str = Form(...), project: str = Form(...), made_by: str = Form(...)):
+    coincell_id = coincell_id.strip()
+    coating_id = coating_id.strip()
+    project = project.strip()
+    made_by = made_by.strip()
+
+    error = None
+    success = None
+
+    if not coincell_id or not coating_id or not project or not made_by:
+        error = "All fields are required and cannot be blank."
+    elif coincell_id != coincell_id.upper():
+        error = f"Coin Cell ID must be uppercase. Try: {coincell_id.upper()}"
+    else:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "INSERT INTO tbl_coincell (coincell_id, coating_id, project, made_by) VALUES (%s, %s, %s, %s)",
+                (coincell_id, coating_id, project, made_by)
+            )
+            conn.commit()
+            success = coincell_id
+        except Exception as e:
+            conn.rollback()
+            error = str(e)
+        cur.close()
+        conn.close()
+
+    return templates.TemplateResponse("new_coincell.html", {"request": request, "error": error, "success": success})
+
 @app.post("/mlp")
 def create_mlp(mlp_id: str, cat_coating_id: str, an_coating_id: str, project: str):
     mlp_id = mlp_id.strip()
@@ -275,6 +312,42 @@ def create_mlp(mlp_id: str, cat_coating_id: str, an_coating_id: str, project: st
     cur.close()
     conn.close()
     return {"status": "created", "mlp_id": mlp_id}
+@app.get("/mlp/new", response_class=HTMLResponse)
+def new_mlp_form(request: Request):
+    return templates.TemplateResponse("new_mlp.html", {"request": request})
+
+
+@app.post("/mlp/new", response_class=HTMLResponse)
+def submit_mlp_form(request: Request, mlp_id: str = Form(...), cat_coating_id: str = Form(...), an_coating_id: str = Form(...), project: str = Form(...)):
+    mlp_id = mlp_id.strip()
+    cat_coating_id = cat_coating_id.strip()
+    an_coating_id = an_coating_id.strip()
+    project = project.strip()
+
+    error = None
+    success = None
+
+    if not mlp_id or not cat_coating_id or not an_coating_id or not project:
+        error = "All fields are required and cannot be blank."
+    elif mlp_id != mlp_id.upper():
+        error = f"MLP ID must be uppercase. Try: {mlp_id.upper()}"
+    else:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "INSERT INTO tbl_mlp (mlp_id, cat_coating_id, an_coating_id, project) VALUES (%s, %s, %s, %s)",
+                (mlp_id, cat_coating_id, an_coating_id, project)
+            )
+            conn.commit()
+            success = mlp_id
+        except Exception as e:
+            conn.rollback()
+            error = str(e)
+        cur.close()
+        conn.close()
+
+    return templates.TemplateResponse("new_mlp.html", {"request": request, "error": error, "success": success})
 
 @app.get("/directory", response_class=HTMLResponse)
 def directory(request: Request, record_id: str = None):
