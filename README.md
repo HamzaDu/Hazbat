@@ -14,6 +14,8 @@ during the manufacturing and subsequent testing stages.
 
 <img width="1492" height="710" alt="image" src="https://github.com/user-attachments/assets/da4e5a2f-1e53-4bf1-9bfe-78f356e1c55f" />
 
+<img width="1496" height="836" alt="image" src="https://github.com/user-attachments/assets/7873c9d9-c5d8-4d4e-8be0-760584a9ded3" />
+
 
 
 
