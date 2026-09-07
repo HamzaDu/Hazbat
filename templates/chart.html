@@ -1,38 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Formation Capacity — BMAC{% endblock %}
+{% block title %}Charts — BMAC{% endblock %}
 {% block content %}
-<h1>Formation Capacity by SLP Cell</h1>
-<div style="max-width: 700px; margin-top: 20px;">
-    <canvas id="myChart"></canvas>
+<div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <h1 style="margin: 0;">Charts</h1>
+        <p style="margin: 4px 0 0; color: #999; font-size: 14px;">Live metrics pulled directly from the database</p>
+    </div>
+    <select id="chartSelect" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #dde2ee; font-size: 14px;">
+        <option value="records-per-table">Records per table</option>
+        <option value="formation-capacity">Formation capacity (SLP)</option>
+        <option value="gsm-by-coating">GSM by coating</option>
+    </select>
 </div>
 
-<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-    fetch('/api/chart/formation-capacity')
-        .then(response => response.json())
-        .then(data => {
-            new Chart(document.getElementById('myChart'), {
-                type: 'bar',
-                data: {
-                    labels: data.labels,
-                    datasets: [{
-                        label: 'Formation Capacity (mAh)',
-                        data: data.values,
-                        backgroundColor: '#2e5fa3'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: { display: true, text: 'mAh' }
-                        }
-                    }
-                }
-            });
+<div class="result" style="margin-top: 20px; max-width: 700px;">
+    <canvas id="dashboardChart"></canvas>
+</div>
+
+<script>
+    let currentChart = null;
+    const chartConfig = {
+        "records-per-table": { type: "doughnut", label: "Records" },
+        "formation-capacity": { type: "bar", label: "Formation Capacity (mAh)" },
+        "gsm-by-coating": { type: "bar", label: "GSM" }
+    };
+    async function loadChart(endpoint) {
+        const res = await fetch(`/api/chart/${endpoint}`);
+        const data = await res.json();
+        const config = chartConfig[endpoint];
+        if (currentChart) currentChart.destroy();
+        if (data.labels.length === 0) return;
+        const colors = ['#2e5fa3', '#4a90d9', '#7ab8e8', '#a8d4f0', '#1b3a6b'];
+        currentChart = new Chart(document.getElementById('dashboardChart'), {
+            type: config.type,
+            data: { labels: data.labels, datasets: [{ label: config.label, data: data.values,
+                backgroundColor: config.type === 'doughnut' ? colors : '#2e5fa3',
+                borderRadius: config.type === 'bar' ? 6 : 0 }] },
+            options: { responsive: true, plugins: { legend: { display: config.type === 'doughnut' } },
+                scales: config.type === 'bar' ? { y: { beginAtZero: true } } : {} }
         });
+    }
+    document.getElementById('chartSelect').addEventListener('change', e => loadChart(e.target.value));
+    loadChart('records-per-table');
 </script>
 {% endblock %}
