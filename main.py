@@ -626,8 +626,8 @@ def chart_formation_capacity():
     values = [float(r[1]) for r in rows]
     return JSONResponse({"labels": labels, "values": values})
  
-@app.get("/chart/formation-capacity", response_class=HTMLResponse)
-def formation_capacity_page(request: Request):
+@app.get("/chart", response_class=HTMLResponse)
+def chart_page(request: Request):
     return templates.TemplateResponse("chart.html", {"request": request})
  
 @app.get("/materials/bulk-upload", response_class=HTMLResponse)

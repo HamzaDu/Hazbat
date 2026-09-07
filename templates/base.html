@@ -26,6 +26,7 @@
         transition: color 0.15s;
     }
     nav a:hover { color: #fff; }
+    nav a.active { color: #fff; font-weight: 700; border-bottom: 2px solid #fff; padding-bottom: 3px; }
     nav .brand {
         font-weight: 800;
         font-size: 19px;
@@ -40,6 +41,29 @@
         font-size: 12px;
         color: rgba(255,255,255,0.6);
     }
+    .nav-dropdown { padding: 4px 0; }
+    .nav-dropdown-menu {
+        display: none;
+        position: absolute;
+        top: 28px;
+        left: 0;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        padding: 8px;
+        min-width: 160px;
+        z-index: 100;
+    }
+    .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+    .nav-dropdown-menu a {
+        display: block;
+        color: #333 !important;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+    }
+    .nav-dropdown-menu a:hover { background: #f0f4fb; }
     main { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
     label { display: block; margin-top: 15px; font-weight: 600; font-size: 13px; color: #444; }
     input {
@@ -61,28 +85,35 @@
     .label { color: #777; font-size: 13px; }
     .value { font-weight: 600; }
 </style>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script><script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
     <nav>
-    <span class="brand">BMAC <span class="by">by HAZbat</span></span>
-    <a href="/">Home</a>
-    <a href="/directory">Directory</a>
-    <a href="/inventory/materials">Materials</a>
-    <a href="/inventory/coatings">Coatings</a>
-    <a href="/inventory/slp">SLP</a>
-    <a href="/inventory/coincell">Coin Cells</a>
-    <a href="/inventory/mlp">MLP</a>
-    <a href="/chart/formation-capacity">Chart</a>
-    <a href="/graph">Graph</a>
-    <span style="margin-left: auto;"></span>
-    {% if request.session.get('user_id') %}
-    <span style="color: rgba(255,255,255,0.7); font-size: 13px;">{{ request.session.get('full_name') }}</span>
-    <a href="/logout">Logout</a>
-    {% else %}
-    <a href="/login">Login</a>
-    {% endif %}
-</nav>
+        <span class="brand">BMAC <span class="by">by HAZbat</span></span>
+        <a href="/" class="{{ 'active' if request.url.path == '/' else '' }}">Home</a>
+        <a href="/directory" class="{{ 'active' if request.url.path == '/directory' else '' }}">Directory</a>
+
+        <div style="position: relative;" class="nav-dropdown">
+            <span style="cursor: pointer; color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 500;">Tables ▾</span>
+            <div class="nav-dropdown-menu">
+                <a href="/inventory/materials">Materials</a>
+                <a href="/inventory/coatings">Coatings</a>
+                <a href="/inventory/slp">SLP</a>
+                <a href="/inventory/coincell">Coin Cells</a>
+                <a href="/inventory/mlp">MLP</a>
+            </div>
+        </div>
+
+        <a href="/chart" class="{{ 'active' if request.url.path == '/chart' else '' }}">Chart</a>
+        <a href="/graph" class="{{ 'active' if request.url.path == '/graph' else '' }}">Graph</a>
+        <span style="margin-left: auto;"></span>
+        {% if request.session.get('user_id') %}
+        <span style="color: rgba(255,255,255,0.7); font-size: 13px;">{{ request.session.get('full_name') }}</span>
+        <a href="/logout">Logout</a>
+        {% else %}
+        <a href="/login">Login</a>
+        {% endif %}
     </nav>
     <main>
         {% block content %}{% endblock %}
