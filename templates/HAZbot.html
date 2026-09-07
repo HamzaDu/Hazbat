@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}HAZbot — BMAC{% endblock %}
+{% block content %}
+<h1 style="margin: 0;">HAZbot</h1>
+<p style="margin: 4px 0 0; color: #999; font-size: 14px;">Ask a question in plain English — HAZbot writes and runs the SQL for you</p>
+
+<div style="display: flex; gap: 10px; margin-top: 20px;">
+    <input type="text" id="questionInput" placeholder="e.g. which coatings have no cells linked yet?" style="flex: 1;">
+    <button id="askBtn" style="margin-top: 0; white-space: nowrap;">Ask HAZbot</button>
+</div>
+
+<div id="status" style="margin-top: 14px; color: #999; font-size: 14px;"></div>
+
+<div id="sqlBox" class="result" style="display:none; margin-top: 16px; font-family: monospace; font-size: 13px; background: #0a0e1a; color: #7ee787; white-space: pre-wrap;"></div>
+
+<div id="insightBox" style="display:none; margin-top: 12px; padding: 12px 16px; background: #eef3fb; border-radius: 10px; font-size: 14px; color: #1b3a6b;"></div>
+
+<div id="resultsBox" class="result" style="display:none; margin-top: 16px; overflow-x: auto;"></div>
+
+<script>
+    const askBtn = document.getElementById('askBtn');
+    const input = document.getElementById('questionInput');
+
+    async function ask() {
+        const question = input.value.trim();
+        if (!question) return;
+
+        document.getElementById('status').textContent = 'Thinking...';
+        document.getElementById('sqlBox').style.display = 'none';
+        document.getElementById('insightBox').style.display = 'none';
+        document.getElementById('resultsBox').style.display = 'none';
+
+        const formData = new URLSearchParams();
+        formData.append('question', question);
+
+        try {
+            const res = await fetch('/api/HAZbot/ask', { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (!res.ok) {
+                document.getElementById('status').textContent = data.error || 'Something went wrong.';
+                if (data.sql) {
+                    document.getElementById('sqlBox').textContent = data.sql;
+                    document.getElementById('sqlBox').style.display = 'block';
+                }
+                return;
+            }
+
+            document.getElementById('status').textContent = '';
+
+            document.getElementById('sqlBox').textContent = data.sql;
+            document.getElementById('sqlBox').style.display = 'block';
+
+            if (data.insight) {
+                document.getElementById('insightBox').textContent = '💡 ' + data.insight;
+                document.getElementById('insightBox').style.display = 'block';
+            }
+
+            const box = document.getElementById('resultsBox');
+            if (data.results.length === 0) {
+                box.innerHTML = '<p style="color:#999;">No rows returned.</p>';
+            } else {
+                const cols = data.columns;
+                box.innerHTML = `
+                    <table style="width:100%; border-collapse: collapse;">
+                        <thead><tr>${cols.map(c => `<th style="text-align:left; padding:8px; border-bottom:2px solid #ccc; font-size:13px;">${c}</th>`).join('')}</tr></thead>
+                        <tbody>${data.results.map(row => `<tr>${cols.map(c => `<td style="padding:8px; border-bottom:1px solid #eee; font-size:13px;">${row[c] ?? '—'}</td>`).join('')}</tr>`).join('')}</tbody>
+                    </table>`;
+            }
+            box.style.display = 'block';
+
+        } catch (err) {
+            document.getElementById('status').textContent = 'Request failed: ' + err;
+        }
+    }
+
+    askBtn.addEventListener('click', ask);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
+</script>
+{% endblock %}
