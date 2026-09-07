@@ -1,46 +1,108 @@
 {% extends "base.html" %}
 {% block title %}Charts — BMAC{% endblock %}
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center;">
-    <div>
-        <h1 style="margin: 0;">Charts</h1>
-        <p style="margin: 4px 0 0; color: #999; font-size: 14px;">Live metrics pulled directly from the database</p>
+<div style="display: flex; gap: 24px; margin-top: -20px;">
+
+    <!-- Sidebar -->
+    <div style="width: 200px; flex-shrink: 0; background: linear-gradient(180deg, #1b3a6b, #14294d); border-radius: 16px; padding: 24px 0; height: fit-content; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+        <div style="padding: 0 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 12px;">
+            <div style="color: white; font-weight: 700; font-size: 15px;">Charts</div>
+            <div style="color: rgba(255,255,255,0.5); font-size: 12px; margin-top: 2px;">Live data views</div>
+        </div>
+        <a class="sidebar-link active" data-target="overview">📊 Overview</a>
+        <a class="sidebar-link" data-target="formation">🔋 Formation Capacity</a>
+        <a class="sidebar-link" data-target="gsm">🧫 GSM by Coating</a>
+        <a class="sidebar-link" data-target="timeline">📈 Coatings Timeline</a>
     </div>
-    <select id="chartSelect" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #dde2ee; font-size: 14px;">
-        <option value="records-per-table">Records per table</option>
-        <option value="formation-capacity">Formation capacity (SLP)</option>
-        <option value="gsm-by-coating">GSM by coating</option>
-    </select>
+
+    <!-- Main panel area -->
+    <div style="flex: 1;">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;" id="statCards"></div>
+
+        <div id="panel-overview" class="chart-panel">
+            <div class="panel-grid">
+                <div class="result"><h4>Records per Table</h4><canvas id="chartOverviewDoughnut"></canvas></div>
+                <div class="result"><h4>Formation Capacity (SLP)</h4><canvas id="chartOverviewBar"></canvas></div>
+            </div>
+        </div>
+
+        <div id="panel-formation" class="chart-panel" style="display:none;">
+            <div class="result"><h4>Formation Capacity — all SLP cells</h4><canvas id="chartFormation"></canvas></div>
+        </div>
+
+        <div id="panel-gsm" class="chart-panel" style="display:none;">
+            <div class="result"><h4>GSM by Coating</h4><canvas id="chartGsm"></canvas></div>
+        </div>
+
+        <div id="panel-timeline" class="chart-panel" style="display:none;">
+            <div class="result"><h4>Coatings Created Over Time</h4><canvas id="chartTimeline"></canvas></div>
+        </div>
+    </div>
 </div>
 
-<div class="result" style="margin-top: 20px; max-width: 700px;">
-    <canvas id="dashboardChart"></canvas>
-</div>
+<style>
+    .sidebar-link {
+        display: block; padding: 10px 20px; color: rgba(255,255,255,0.7);
+        font-size: 14px; font-weight: 500; text-decoration: none; border-left: 3px solid transparent;
+    }
+    .sidebar-link:hover { background: rgba(255,255,255,0.05); color: white; }
+    .sidebar-link.active { background: rgba(255,255,255,0.08); color: white; border-left-color: #4a90d9; }
+    .panel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .result h4 { margin: 0 0 12px; font-size: 14px; color: #555; }
+</style>
 
 <script>
-    let currentChart = null;
-    const chartConfig = {
-        "records-per-table": { type: "doughnut", label: "Records" },
-        "formation-capacity": { type: "bar", label: "Formation Capacity (mAh)" },
-        "gsm-by-coating": { type: "bar", label: "GSM" }
-    };
-    async function loadChart(endpoint) {
-        const res = await fetch(`/api/chart/${endpoint}`);
-        const data = await res.json();
-        const config = chartConfig[endpoint];
-        if (currentChart) currentChart.destroy();
-        if (data.labels.length === 0) return;
-        const colors = ['#2e5fa3', '#4a90d9', '#7ab8e8', '#a8d4f0', '#1b3a6b'];
-        currentChart = new Chart(document.getElementById('dashboardChart'), {
-            type: config.type,
-            data: { labels: data.labels, datasets: [{ label: config.label, data: data.values,
-                backgroundColor: config.type === 'doughnut' ? colors : '#2e5fa3',
-                borderRadius: config.type === 'bar' ? 6 : 0 }] },
-            options: { responsive: true, plugins: { legend: { display: config.type === 'doughnut' } },
-                scales: config.type === 'bar' ? { y: { beginAtZero: true } } : {} }
+    const palette = ['#2e5fa3', '#4a90d9', '#7ab8e8', '#a8d4f0', '#1b3a6b'];
+    const charts = {};
+
+    function makeChart(canvasId, type, labels, values, label) {
+        if (charts[canvasId]) charts[canvasId].destroy();
+        if (labels.length === 0) return;
+        charts[canvasId] = new Chart(document.getElementById(canvasId), {
+            type: type,
+            data: { labels, datasets: [{ label, data: values,
+                backgroundColor: type === 'doughnut' ? palette : (type === 'line' ? 'rgba(46,95,163,0.15)' : '#2e5fa3'),
+                borderColor: type === 'line' ? '#2e5fa3' : undefined,
+                fill: type === 'line',
+                tension: 0.35,
+                borderRadius: type === 'bar' ? 6 : 0 }] },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: type === 'doughnut' }, tooltip: { enabled: true } },
+                scales: type !== 'doughnut' ? { y: { beginAtZero: true } } : {}
+            }
         });
     }
-    document.getElementById('chartSelect').addEventListener('change', e => loadChart(e.target.value));
-    loadChart('records-per-table');
+
+    async function loadAll() {
+        const rpt = await (await fetch('/api/chart/records-per-table')).json();
+        makeChart('chartOverviewDoughnut', 'doughnut', rpt.labels, rpt.values, 'Records');
+        document.getElementById('statCards').innerHTML = rpt.labels.map((l, i) => `
+            <div style="background: white; border-radius: 12px; padding: 14px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                <div style="font-size: 22px; font-weight: 800; color: #1b3a6b;">${rpt.values[i]}</div>
+                <div style="font-size: 11px; color: #999;">${l}</div>
+            </div>`).join('');
+
+        const fc = await (await fetch('/api/chart/formation-capacity')).json();
+        makeChart('chartOverviewBar', 'bar', fc.labels, fc.values, 'mAh');
+        makeChart('chartFormation', 'bar', fc.labels, fc.values, 'Formation Capacity (mAh)');
+
+        const gsm = await (await fetch('/api/chart/gsm-by-coating')).json();
+        makeChart('chartGsm', 'bar', gsm.labels, gsm.values, 'GSM');
+
+        const timeline = await (await fetch('/api/chart/coatings-over-time')).json();
+        makeChart('chartTimeline', 'line', timeline.labels, timeline.values, 'Coatings created');
+    }
+
+    document.querySelectorAll('.sidebar-link').forEach(link => {
+        link.addEventListener('click', () => {
+            document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+            document.querySelectorAll('.chart-panel').forEach(p => p.style.display = 'none');
+            document.getElementById('panel-' + link.dataset.target).style.display = 'block';
+        });
+    });
+
+    loadAll();
 </script>
 {% endblock %}

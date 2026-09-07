@@ -946,6 +946,71 @@ def view_card(request: Request, record_id: str):
     if not record_type:
         return HTMLResponse("Unrecognised ID format.", status_code=404)
 
+@app.get("/api/card/{record_id}")
+def card_data(record_id: str):
+    record_type = detect_record_type(record_id)
+    if not record_type:
+        return JSONResponse({"error": "Unrecognised ID format"}, status_code=404)
+
+    conn = get_connection()
+    cur = conn.cursor()
+    record = None
+    chain = []
+
+    if record_type == "material":
+        cur.execute("SELECT chemistry, supplier, date_received, quantity_kg, location, availability FROM tbl_materials WHERE material_id = %s", (record_id,))
+        row = cur.fetchone()
+        if row:
+            columns = ["Chemistry", "Supplier", "Date Received", "Quantity (kg)", "Location", "Availability"]
+            record = dict(zip(columns, [str(v) if v is not None else "N/A" for v in row]))
+            cur.execute("SELECT coating_id FROM tbl_coating WHERE material_id = %s", (record_id,))
+            chain = [f"Coating: {r[0]}" for r in cur.fetchall()]
+
+    elif record_type == "coating":
+        cur.execute("SELECT material_id, project, coating_date, made_by, coat_weight_gsm, porosity FROM tbl_coating WHERE coating_id = %s", (record_id,))
+        row = cur.fetchone()
+        if row:
+            columns = ["Material ID", "Project", "Coating Date", "Made By", "GSM", "Porosity"]
+            record = dict(zip(columns, [str(v) if v is not None else "N/A" for v in row]))
+            cur.execute("SELECT slp_id FROM tbl_slp WHERE coating_id = %s", (record_id,))
+            chain += [f"SLP: {r[0]}" for r in cur.fetchall()]
+            cur.execute("SELECT coincell_id FROM tbl_coincell WHERE coating_id = %s", (record_id,))
+            chain += [f"CoinCell: {r[0]}" for r in cur.fetchall()]
+            cur.execute("SELECT mlp_id FROM tbl_mlp WHERE cat_coating_id = %s OR an_coating_id = %s", (record_id, record_id))
+            chain += [f"MLP: {r[0]}" for r in cur.fetchall()]
+
+    elif record_type == "slp":
+        cur.execute("SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity FROM tbl_slp WHERE slp_id = %s", (record_id,))
+        row = cur.fetchone()
+        if row:
+            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity"]
+            record = dict(zip(columns, [str(v) if v is not None else "N/A" for v in row]))
+            chain = [f"Coating: {record['Coating ID']}"]
+
+    elif record_type == "coincell":
+        cur.execute("SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity FROM tbl_coincell WHERE coincell_id = %s", (record_id,))
+        row = cur.fetchone()
+        if row:
+            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity"]
+            record = dict(zip(columns, [str(v) if v is not None else "N/A" for v in row]))
+            chain = [f"Coating: {record['Coating ID']}"]
+
+    elif record_type == "mlp":
+        cur.execute("SELECT cat_coating_id, an_coating_id, project, date_made, cell_capacity FROM tbl_mlp WHERE mlp_id = %s", (record_id,))
+        row = cur.fetchone()
+        if row:
+            columns = ["Cathode Coating", "Anode Coating", "Project", "Date Made", "Cell Capacity"]
+            record = dict(zip(columns, [str(v) if v is not None else "N/A" for v in row]))
+            chain = [f"Cathode: {record['Cathode Coating']}", f"Anode: {record['Anode Coating']}"]
+
+    cur.close()
+    conn.close()
+
+    if not record:
+        return JSONResponse({"error": "Record not found"}, status_code=404)
+
+    return JSONResponse({"record_id": record_id, "record_type": record_type, "record": record, "chain": chain})
+
     # Generate the QR code for THIS card's own URL
     card_url = f"{BASE_URL}/card/{record_id}"
     qr_img = qrcode.make(card_url)
@@ -1121,3 +1186,19 @@ def graph_page(request: Request):
 @app.get("/graph", response_class=HTMLResponse)
 def graph_page(request: Request):
     return templates.TemplateResponse("graph.html", {"request": request})
+
+@app.get("/api/chart/coatings-over-time")
+def chart_coatings_over_time():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT coating_date, COUNT(*) 
+        FROM tbl_coating 
+        WHERE coating_date IS NOT NULL 
+        GROUP BY coating_date 
+        ORDER BY coating_date
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return JSONResponse({"labels": [str(r[0]) for r in rows], "values": [r[1] for r in rows]})
