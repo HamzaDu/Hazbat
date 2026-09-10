@@ -839,7 +839,7 @@ async def bulk_upload_coincell(request: Request, file: UploadFile = File(...)):
         coating_id = str(row.get("coating_id", "")).strip()
         project = str(row.get("project", "")).strip()
         made_by = str(row.get("made_by", "")).strip()
- 
+        formation_capacity = float(row.get("formation_capacity", 0))
         if not coincell_id or not coating_id or not project or not made_by or coincell_id == "nan":
             failed.append({"row": row_num, "reason": "Missing required field(s)."})
             continue
@@ -849,8 +849,8 @@ async def bulk_upload_coincell(request: Request, file: UploadFile = File(...)):
  
         try:
             cur.execute(
-                "INSERT INTO tbl_coincell (coincell_id, coating_id, project, made_by) VALUES (%s, %s, %s, %s)",
-                (coincell_id, coating_id, project, made_by)
+                "INSERT INTO tbl_coincell (coincell_id, coating_id, project, made_by, formation_capacity) VALUES (%s, %s, %s, %s, %s)",
+                (coincell_id, coating_id, project, made_by, formation_capacity)
             )
             conn.commit()
             success.append(coincell_id)

@@ -3,6 +3,3 @@ __pycache__/
 *.pyc
 .env
 schema.sql
-testcoatings.csv
-testmaterials.csv
-testslp.csv
