@@ -1,7 +1,7 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 sqlalchemy==2.0.35
-psycopg2-binary==2.9.9
+psycopg2-binary>=2.9.9
 python-dotenv==1.0.1
 jinja2==3.1.4
 python-multipart==0.0.9
@@ -10,3 +10,6 @@ openpyxl==3.1.5
 bcrypt==4.2.0
 itsdangerous==2.2.0
 qrcode[pil]==7.4.2
+python-dotenv==1.0.1
+requests==2.32.3
+pymatgen==2024.10.29
