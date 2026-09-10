@@ -19,6 +19,9 @@ app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-secret-change-this-later"))
 templates = Jinja2Templates(directory="templates")
 def get_connection():
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        return psycopg2.connect(database_url)
     return psycopg2.connect(dbname="bmac", user="hazma", host="localhost")
  
 def require_login(request: Request):
