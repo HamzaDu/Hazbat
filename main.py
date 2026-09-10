@@ -12,12 +12,12 @@ from fastapi.responses import RedirectResponse
 import qrcode
 import io
 import base64
+import os
  
 BASE_URL = "http://127.0.0.1:8000"
 app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key="dev-secret-change-this-later")
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-secret-change-this-later"))
 templates = Jinja2Templates(directory="templates")
- 
 def get_connection():
     return psycopg2.connect(dbname="bmac", user="hazma", host="localhost")
  
