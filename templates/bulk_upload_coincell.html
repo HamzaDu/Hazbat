@@ -3,7 +3,7 @@ cat > templates/bulk_upload_coincell.html << 'EOF'
 {% block title %}Bulk Upload Coin Cells — BMAC{% endblock %}
 {% block content %}
 <h1>Bulk Upload Coin Cells</h1>
-<p>Upload a CSV or Excel file with columns: <strong>coincell_id, coating_id, project, made_by</strong></p>
+<p>Upload a CSV or Excel file with columns: <strong>coincell_id, coating_id, project, GSM, made_by, Notes</strong></p>
 
 <form method="post" action="/coincell/bulk-upload" enctype="multipart/form-data">
     <label>File</label>
