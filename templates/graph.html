@@ -48,7 +48,7 @@
         document.getElementById('nodeCard').style.display = 'none';
         if (pulseInterval) clearInterval(pulseInterval);
         edgesDS.forEach(e => edgesDS.update({ id: e.id, color: { color: 'rgba(120,140,200,0.35)' }, width: 1.5 }));
-        nodesDS.forEach(n => nodesDS.update({ id: n.id, borderWidth: 2 }));
+        nodesDS.forEach(node => setNodeStyle(node, true));
     }
 
     const groupColors = {
