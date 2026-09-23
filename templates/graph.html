@@ -29,6 +29,23 @@
 
     let network, nodesDS, edgesDS, pulseInterval;
 
+    // --- Border scaling state ---
+    // borderWidth in vis.js is in screen pixels; node size scales with zoom.
+    // We track the current scale and re-apply borders on every zoom event so
+    // the border thickness stays visually proportional to the node size.
+    let currentScale = 1;
+
+    // null  → no selection active (all nodes at normal style)
+    // Set   → active selection; contains IDs on the highlighted path
+    let currentSelectedPath = null;
+
+    // Base border widths at scale 1. Multiplied by currentScale when applied.
+    const BASE_BORDER = {
+        normal:   2,   // no selection active
+        selected: 4,   // on the highlighted path
+        dimmed:   1    // off the highlighted path
+    };
+
     function findPathToRoot(targetId, edges) {
         // Walk backwards through edges (child -> parent) until no parent found.
         // Excludes dashed project-reference edges — only follows real traceability links.
@@ -42,6 +59,25 @@
             current = parentEdge.from;
         }
         return path;
+    }
+
+    function findDescendants(startId, edges) {
+        // Follow real traceability links forward, from parent to child.
+        const descendants = new Set([startId]);
+        const queue = [startId];
+
+        while (queue.length) {
+            const current = queue.shift();
+            edges
+                .filter(edge => edge.from === current && !edge.dashes)
+                .forEach(edge => {
+                    if (!descendants.has(edge.to)) {
+                        descendants.add(edge.to);
+                        queue.push(edge.to);
+                    }
+                });
+        }
+        return descendants;
     }
 
     function clearSelection() {
@@ -70,18 +106,25 @@
             project: 3
     };
 
-    //dimmer to unselected nodes?
 
     function rgba(hex, opacity) {
         const value = parseInt(hex.slice(1), 16);
         return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${opacity})`;
     }
 
+    // isOnPath = true  → node is highlighted (or no selection is active, i.e. normal state)
+    // isOnPath = false → node is dimmed because it is off the selected path
     function setNodeStyle(node, isOnPath) {
         const colors = groupColors[node.group];
+
+        // Scale the border so it remains proportional to node size at any zoom level.
+        const border = isOnPath
+            ? BASE_BORDER.selected * currentScale
+            : BASE_BORDER.dimmed   * currentScale;
+        
         nodesDS.update({
             id: node.id,
-            borderWidth: isOnPath ? 4 : 1,
+            borderWidth: border,
             color: isOnPath
                 ? { background: colors.background, border: colors.border }
                 : { background: rgba(colors.background, 0.12), border: rgba(colors.border, 0.18) },
@@ -96,6 +139,21 @@
         });
     }
 
+     // Called on every zoom event. Re-applies the correct style (with updated
+    // scale) to every node, respecting the current selection state.
+    function onZoom(params) {
+        currentScale = params.scale;
+        if (currentSelectedPath !== null) {
+            // Selection is active — re-apply highlight/dim with new border sizes.
+            nodesDS.forEach(node => setNodeStyle(node, currentSelectedPath.has(node.id)));
+        } else {
+            // No selection — update all nodes to normal border width only.
+            nodesDS.forEach(n => nodesDS.update({
+                id: n.id,
+                borderWidth: BASE_BORDER.normal * currentScale
+            }));
+        }
+    }
     
     fetch('/api/graph')
         .then(res => res.json())
@@ -146,16 +204,21 @@
                 // Trace the manufacturing path back to its root material
                 const allEdges = edgesDS.get();
                 const path = findPathToRoot(nodeId, allEdges);
-                const pathEdgeIds = [];
-                for (let i = 0; i < path.length - 1; i++) {
-                    const edge = allEdges.find(e => e.from === path[i] && e.to === path[i + 1]);
-                    if (edge) pathEdgeIds.push(edge.id);
-                }
 
-                // Highlight the path nodes
-                // path.forEach(id => nodesDS.update({ id, borderWidth: 4 }));
-                // dimmer?
-                const selectedPath = new Set(path);
+                // Include the upstream path and every downstream traceability node.
+                const downstreamNodes = findDescendants(nodeId, allEdges);
+                const selectedPath = new Set([...path, ...downstreamNodes]);
+
+                // Highlight all real edges within the selected traceability branch.
+                const pathEdgeIds = allEdges
+                    .filter(edge =>
+                        !edge.dashes &&
+                        selectedPath.has(edge.from) &&
+                        selectedPath.has(edge.to)
+                    )
+                    .map(edge => edge.id);
+
+                // Brighten selected/upstream/downstream nodes and dim all others.
                 nodesDS.forEach(node => setNodeStyle(node, selectedPath.has(node.id)));
 
                 // Pulsing animation along the path edges
