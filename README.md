@@ -6,7 +6,7 @@ during the manufacturing and subsequent testing stages.
 
 ## How to Run BMAC Locally
 
-What you'll need first: Python 3.9+, PostgreSQL (Postgres.app on Mac is the easiest route), VS Code, and Git. 
+What you'll need first: Python 3.9+, PostgreSQL, VS Code, and Git. 
 Clone the repo: git clone https://github.com/HamzaDu/Hazbat.git 
 Create and activate a virtual environment: python3 -m venv venv then source venv/bin/activate 
 Install dependencies: pip install -r requirements.txt 
