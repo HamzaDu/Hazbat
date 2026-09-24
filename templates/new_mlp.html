@@ -12,15 +12,22 @@
         </div>
         <div class="field">
             <label for="cat_coating_id">Cathode Coating ID</label>
-            <input type="text" id="cat_coating_id" name="cat_coating_id" placeholder="Must already exist" value="{{ f.get("cat_coating_id", "") }}" required>
+            <input type="text" id="cat_coating_id" name="cat_coating_id" list="cat-coatings-list" autocomplete="off" placeholder="Start typing to search…" value="{{ f.get("cat_coating_id", "") }}" required>
+            <datalist id="cat-coatings-list">{% for o in cat_coatings %}<option value="{{ o.id }}">{{ o.label }}</option>{% endfor %}</datalist>
+            {% if not cat_coatings %}<p class="hint">No cathode (CAT-) coatings yet. <a href="/coatings/new">Create one first</a>.</p>{% endif %}
         </div>
         <div class="field">
             <label for="an_coating_id">Anode Coating ID</label>
-            <input type="text" id="an_coating_id" name="an_coating_id" placeholder="Must already exist" value="{{ f.get("an_coating_id", "") }}" required>
+            <input type="text" id="an_coating_id" name="an_coating_id" list="an-coatings-list" autocomplete="off" placeholder="Start typing to search…" value="{{ f.get("an_coating_id", "") }}" required>
+            <datalist id="an-coatings-list">{% for o in an_coatings %}<option value="{{ o.id }}">{{ o.label }}</option>{% endfor %}</datalist>
+            {% if not an_coatings %}<p class="hint">No anode (AN-) coatings yet. <a href="/coatings/new">Create one first</a>.</p>{% endif %}
         </div>
         <div class="field">
             <label for="project">Project</label>
-            <input type="text" id="project" name="project" placeholder="e.g. LEAP" value="{{ f.get("project", "") }}" required>
+            <select id="project" name="project" required>
+                <option value="" disabled {% if not f.get("project") %}selected{% endif %}>Choose a project…</option>
+                {% for p in projects %}<option value="{{ p }}" {% if f.get("project") == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+            </select>
         </div>
     </fieldset>
 

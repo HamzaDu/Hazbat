@@ -97,6 +97,67 @@ def form_state(*dicts):
     return merged
 
 
+def record_exists(table: str, id_column: str, value: str) -> bool:
+    """True if a row with this ID exists. Table/column names come from our own code."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT 1 FROM {table} WHERE {id_column} = %s", (value,))
+        return cur.fetchone() is not None
+    finally:
+        cur.close()
+        conn.close()
+
+
+def coating_electrode(coating_id: str):
+    """'cathode' / 'anode' for a coating (from its material's CAT-/AN- prefix), or None if not found."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT material_id FROM tbl_coating WHERE coating_id = %s", (coating_id,))
+        row = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+    if not row:
+        return None
+    return "cathode" if row[0].startswith("CAT-") else "anode" if row[0].startswith("AN-") else "unknown"
+
+
+def load_form_options():
+    """Lists that fill the dropdowns on the New Coating / SLP / Coin Cell / MLP forms."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT project_name FROM tbl_projects WHERE active ORDER BY project_name")
+        projects = [r[0] for r in cur.fetchall()]
+
+        cur.execute("SELECT material_id, chemistry, supplier FROM tbl_materials ORDER BY material_id")
+        materials = [{"id": r[0], "label": " · ".join(str(x) for x in r[1:] if x)} for r in cur.fetchall()]
+
+        cur.execute(
+            "SELECT c.coating_id, c.material_id, m.chemistry, c.coating_date "
+            "FROM tbl_coating c LEFT JOIN tbl_materials m ON m.material_id = c.material_id "
+            "ORDER BY c.coating_id"
+        )
+        coatings = []
+        for coating_id, material_id, chemistry, coating_date in cur.fetchall():
+            label = " · ".join(str(x) for x in (chemistry or material_id, coating_date) if x)
+            electrode = "cathode" if material_id.startswith("CAT-") else "anode" if material_id.startswith("AN-") else ""
+            coatings.append({"id": coating_id, "label": label, "electrode": electrode})
+    finally:
+        cur.close()
+        conn.close()
+
+    return {
+        "projects": projects,
+        "materials": materials,
+        "coatings": coatings,
+        "cat_coatings": [c for c in coatings if c["electrode"] == "cathode"],
+        "an_coatings": [c for c in coatings if c["electrode"] == "anode"],
+    }
+
+
 @app.post("/materials/new", response_class=HTMLResponse)
 def submit_material_form(request: Request, material_id: str = Form(...), chemistry: str = Form(...), supplier: str = Form(...),
                          date_received: str = Form(None), quantity_kg: str = Form(None), location: str = Form(None),
@@ -194,7 +255,7 @@ def new_coating_form(request: Request):
     redirect = require_login(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse("new_coating.html", {"request": request})
+    return templates.TemplateResponse("new_coating.html", {"request": request, **load_form_options()})
  
  
 @app.post("/coatings/new", response_class=HTMLResponse)
@@ -214,6 +275,8 @@ def submit_coating_form(request: Request, coating_id: str = Form(...), material_
         error = "Coating ID, material ID, project and made by are required."
     elif coating_id != coating_id.upper():
         error = f"Coating ID must be uppercase. Try: {coating_id.upper()}"
+    elif not record_exists("tbl_materials", "material_id", required["material_id"]):
+        error = f"Material {required['material_id']} doesn't exist yet. Pick one from the list or create it first."
     else:
         extras, error = clean_optional_fields(optional, numeric_fields={"coat_weight_gsm", "porosity"})
         if not error:
@@ -221,7 +284,7 @@ def submit_coating_form(request: Request, coating_id: str = Form(...), material_
         if not error:
             success, form = coating_id, {}
 
-    return templates.TemplateResponse("new_coating.html", {"request": request, "error": error, "success": success, "form": form})
+    return templates.TemplateResponse("new_coating.html", {"request": request, "error": error, "success": success, "form": form, **load_form_options()})
 
 @app.post("/slp")
 def create_slp(slp_id: str, coating_id: str, project: str, made_by: str):
@@ -258,7 +321,7 @@ def new_slp_form(request: Request):
     redirect = require_login(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse("new_slp.html", {"request": request})
+    return templates.TemplateResponse("new_slp.html", {"request": request, **load_form_options()})
  
 @app.post("/slp/new", response_class=HTMLResponse)
 def submit_slp_form(request: Request, slp_id: str = Form(...), coating_id: str = Form(...), project: str = Form(...), made_by: str = Form(...),
@@ -279,6 +342,8 @@ def submit_slp_form(request: Request, slp_id: str = Form(...), coating_id: str =
         error = "SLP ID, coating ID, project and made by are required."
     elif slp_id != slp_id.upper():
         error = f"SLP ID must be uppercase. Try: {slp_id.upper()}"
+    elif not record_exists("tbl_coating", "coating_id", required["coating_id"]):
+        error = f"Coating {required['coating_id']} doesn't exist yet. Pick one from the list or create it first."
     else:
         extras, error = clean_optional_fields(optional, numeric_fields={"formation_capacity", "np_ratio"})
         if not error:
@@ -286,7 +351,7 @@ def submit_slp_form(request: Request, slp_id: str = Form(...), coating_id: str =
         if not error:
             success, form = slp_id, {}
 
-    return templates.TemplateResponse("new_slp.html", {"request": request, "error": error, "success": success, "form": form})
+    return templates.TemplateResponse("new_slp.html", {"request": request, "error": error, "success": success, "form": form, **load_form_options()})
 
 @app.post("/coincell")
 def create_coincell(coincell_id: str, coating_id: str, project: str, made_by: str):
@@ -323,7 +388,7 @@ def new_coincell_form(request: Request):
     redirect = require_login(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse("new_coincell.html", {"request": request})
+    return templates.TemplateResponse("new_coincell.html", {"request": request, **load_form_options()})
  
  
 @app.post("/coincell/new", response_class=HTMLResponse)
@@ -344,6 +409,8 @@ def submit_coincell_form(request: Request, coincell_id: str = Form(...), coating
         error = "Coin cell ID, coating ID, project and made by are required."
     elif coincell_id != coincell_id.upper():
         error = f"Coin Cell ID must be uppercase. Try: {coincell_id.upper()}"
+    elif not record_exists("tbl_coating", "coating_id", required["coating_id"]):
+        error = f"Coating {required['coating_id']} doesn't exist yet. Pick one from the list or create it first."
     else:
         extras, error = clean_optional_fields(optional, numeric_fields={"formation_capacity"})
         if not error:
@@ -351,7 +418,7 @@ def submit_coincell_form(request: Request, coincell_id: str = Form(...), coating
         if not error:
             success, form = coincell_id, {}
 
-    return templates.TemplateResponse("new_coincell.html", {"request": request, "error": error, "success": success, "form": form})
+    return templates.TemplateResponse("new_coincell.html", {"request": request, "error": error, "success": success, "form": form, **load_form_options()})
 
 @app.post("/mlp")
 def create_mlp(mlp_id: str, cat_coating_id: str, an_coating_id: str, project: str):
@@ -388,7 +455,7 @@ def new_mlp_form(request: Request):
     redirect = require_login(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse("new_mlp.html", {"request": request})
+    return templates.TemplateResponse("new_mlp.html", {"request": request, **load_form_options()})
  
  
 @app.post("/mlp/new", response_class=HTMLResponse)
@@ -409,6 +476,10 @@ def submit_mlp_form(request: Request, mlp_id: str = Form(...), cat_coating_id: s
         error = "MLP ID, both coating IDs and project are required."
     elif mlp_id != mlp_id.upper():
         error = f"MLP ID must be uppercase. Try: {mlp_id.upper()}"
+    elif coating_electrode(required["cat_coating_id"]) != "cathode":
+        error = f"{required['cat_coating_id']} isn't an existing cathode (CAT-) coating."
+    elif coating_electrode(required["an_coating_id"]) != "anode":
+        error = f"{required['an_coating_id']} isn't an existing anode (AN-) coating."
     else:
         extras, error = clean_optional_fields(optional, numeric_fields={"cell_capacity", "ac_area_ratio"})
         if not error:
@@ -416,7 +487,7 @@ def submit_mlp_form(request: Request, mlp_id: str = Form(...), cat_coating_id: s
         if not error:
             success, form = mlp_id, {}
 
-    return templates.TemplateResponse("new_mlp.html", {"request": request, "error": error, "success": success, "form": form})
+    return templates.TemplateResponse("new_mlp.html", {"request": request, "error": error, "success": success, "form": form, **load_form_options()})
 
 @app.get("/directory", response_class=HTMLResponse)
 def directory(request: Request, record_id: str = None):
