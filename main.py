@@ -40,42 +40,93 @@ def new_material_form(request: Request):
         return redirect
     return templates.TemplateResponse("new_material.html", {"request": request})
  
+# --- Shared helpers for the "New record" forms ------------------------------
+FIELD_LABELS = {
+    "quantity_kg": "Quantity (kg)", "coat_weight_gsm": "Coat weight (g/m²)", "porosity": "Porosity",
+    "formation_capacity": "Formation capacity", "np_ratio": "N/P ratio",
+    "cell_capacity": "Cell capacity", "ac_area_ratio": "A/C area ratio",
+}
+
+
+def clean_optional_fields(values: dict, numeric_fields=()):
+    """Tidy optional form values: blank -> None, numbers -> float.
+    Returns (cleaned_dict, None) or (None, error_message)."""
+    cleaned = {}
+    for field, value in values.items():
+        value = (value or "").strip()
+        if value == "":
+            cleaned[field] = None
+        elif field in numeric_fields:
+            label = FIELD_LABELS.get(field, field)
+            try:
+                number = float(value)
+            except ValueError:
+                return None, f"{label} must be a number."
+            if number < 0:
+                return None, f"{label} cannot be negative."
+            cleaned[field] = number
+        else:
+            cleaned[field] = value
+    return cleaned, None
+
+
+def insert_record(table: str, data: dict):
+    """INSERT one row. Table/column names come from our own code, never from the user.
+    Returns None on success or an error message."""
+    columns = ", ".join(data.keys())
+    placeholders = ", ".join(["%s"] * len(data))
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"INSERT INTO {table} ({columns}) VALUES ({placeholders})", list(data.values()))
+        conn.commit()
+        return None
+    except Exception as e:
+        conn.rollback()
+        return str(e)
+    finally:
+        cur.close()
+        conn.close()
+
+
+def form_state(*dicts):
+    """Values to re-fill the form with if saving fails, so nothing has to be retyped."""
+    merged = {}
+    for d in dicts:
+        merged.update({k: (v or "").strip() for k, v in d.items()})
+    return merged
+
+
 @app.post("/materials/new", response_class=HTMLResponse)
-def submit_material_form(request: Request, material_id: str = Form(...), chemistry: str = Form(...), supplier: str = Form(...)):
+def submit_material_form(request: Request, material_id: str = Form(...), chemistry: str = Form(...), supplier: str = Form(...),
+                         date_received: str = Form(None), quantity_kg: str = Form(None), location: str = Form(None),
+                         availability: str = Form(None), notes: str = Form(None)):
     redirect = require_login(request)
     if redirect:
         return redirect
-    material_id = material_id.strip()
-    chemistry = chemistry.strip()
-    supplier = supplier.strip()
- 
+    required = {"material_id": material_id.strip(), "chemistry": chemistry.strip(), "supplier": supplier.strip()}
+    optional = {"date_received": date_received, "quantity_kg": quantity_kg, "location": location,
+                "availability": availability, "notes": notes}
+    form = form_state(required, optional)
     error = None
     success = None
- 
-    if not material_id or not chemistry or not supplier:
-        error = "All fields are required and cannot be blank."
+
+    material_id = required["material_id"]
+    if not all(required.values()):
+        error = "Material ID, chemistry and supplier are required."
     elif material_id != material_id.upper():
         error = f"Material ID must be uppercase. Try: {material_id.upper()}"
     elif not (material_id.startswith("CAT-") or material_id.startswith("AN-")):
         error = "Material ID must start with 'CAT-' or 'AN-'."
     else:
-        conn = get_connection()
-        cur = conn.cursor()
-        try:
-            cur.execute(
-                "INSERT INTO tbl_materials (material_id, chemistry, supplier) VALUES (%s, %s, %s)",
-                (material_id, chemistry, supplier)
-            )
-            conn.commit()
-            success = material_id
-        except Exception as e:
-            conn.rollback()
-            error = str(e)
-        cur.close()
-        conn.close()
- 
-    return templates.TemplateResponse("new_material.html", {"request": request, "error": error, "success": success})
- 
+        extras, error = clean_optional_fields(optional, numeric_fields={"quantity_kg"})
+        if not error:
+            error = insert_record("tbl_materials", {**required, **extras})
+        if not error:
+            success, form = material_id, {}
+
+    return templates.TemplateResponse("new_material.html", {"request": request, "error": error, "success": success, "form": form})
+
 @app.post("/materials")
 def create_material(material_id: str, chemistry: str, supplier: str):
     material_id = material_id.strip()
@@ -147,40 +198,31 @@ def new_coating_form(request: Request):
  
  
 @app.post("/coatings/new", response_class=HTMLResponse)
-def submit_coating_form(request: Request, coating_id: str = Form(...), material_id: str = Form(...), project: str = Form(...), made_by: str = Form(...)):
+def submit_coating_form(request: Request, coating_id: str = Form(...), material_id: str = Form(...), project: str = Form(...), made_by: str = Form(...),
+                        coating_date: str = Form(None), coat_weight_gsm: str = Form(None), porosity: str = Form(None), notes: str = Form(None)):
     redirect = require_login(request)
     if redirect:
         return redirect
-    coating_id = coating_id.strip()
-    material_id = material_id.strip()
-    project = project.strip()
-    made_by = made_by.strip()
- 
+    required = {"coating_id": coating_id.strip(), "material_id": material_id.strip(), "project": project.strip(), "made_by": made_by.strip()}
+    optional = {"coating_date": coating_date, "coat_weight_gsm": coat_weight_gsm, "porosity": porosity, "notes": notes}
+    form = form_state(required, optional)
     error = None
     success = None
- 
-    if not coating_id or not material_id or not project or not made_by:
-        error = "All fields are required and cannot be blank."
+
+    coating_id = required["coating_id"]
+    if not all(required.values()):
+        error = "Coating ID, material ID, project and made by are required."
     elif coating_id != coating_id.upper():
         error = f"Coating ID must be uppercase. Try: {coating_id.upper()}"
     else:
-        conn = get_connection()
-        cur = conn.cursor()
-        try:
-            cur.execute(
-                "INSERT INTO tbl_coating (coating_id, material_id, project, made_by) VALUES (%s, %s, %s, %s)",
-                (coating_id, material_id, project, made_by)
-            )
-            conn.commit()
-            success = coating_id
-        except Exception as e:
-            conn.rollback()
-            error = str(e)
-        cur.close()
-        conn.close()
- 
-    return templates.TemplateResponse("new_coating.html", {"request": request, "error": error, "success": success})
- 
+        extras, error = clean_optional_fields(optional, numeric_fields={"coat_weight_gsm", "porosity"})
+        if not error:
+            error = insert_record("tbl_coating", {**required, **extras})
+        if not error:
+            success, form = coating_id, {}
+
+    return templates.TemplateResponse("new_coating.html", {"request": request, "error": error, "success": success, "form": form})
+
 @app.post("/slp")
 def create_slp(slp_id: str, coating_id: str, project: str, made_by: str):
     slp_id = slp_id.strip()
@@ -219,40 +261,33 @@ def new_slp_form(request: Request):
     return templates.TemplateResponse("new_slp.html", {"request": request})
  
 @app.post("/slp/new", response_class=HTMLResponse)
-def submit_slp_form(request: Request, slp_id: str = Form(...), coating_id: str = Form(...), project: str = Form(...), made_by: str = Form(...), formation_capacity: str = Form(None)):
+def submit_slp_form(request: Request, slp_id: str = Form(...), coating_id: str = Form(...), project: str = Form(...), made_by: str = Form(...),
+                    formation_capacity: str = Form(None), date_made: str = Form(None), electrolyte: str = Form(None),
+                    np_ratio: str = Form(None), notes: str = Form(None)):
     redirect = require_login(request)
     if redirect:
         return redirect
-    slp_id = slp_id.strip()
-    coating_id = coating_id.strip()
-    project = project.strip()
-    made_by = made_by.strip()
- 
+    required = {"slp_id": slp_id.strip(), "coating_id": coating_id.strip(), "project": project.strip(), "made_by": made_by.strip()}
+    optional = {"date_made": date_made, "electrolyte": electrolyte, "formation_capacity": formation_capacity,
+                "np_ratio": np_ratio, "notes": notes}
+    form = form_state(required, optional)
     error = None
     success = None
- 
-    if not slp_id or not coating_id or not project or not made_by:
-        error = "All fields are required and cannot be blank."
+
+    slp_id = required["slp_id"]
+    if not all(required.values()):
+        error = "SLP ID, coating ID, project and made by are required."
     elif slp_id != slp_id.upper():
         error = f"SLP ID must be uppercase. Try: {slp_id.upper()}"
     else:
-        conn = get_connection()
-        cur = conn.cursor()
-        try:
-            cur.execute(
-                "INSERT INTO tbl_slp (slp_id, coating_id, project, made_by, formation_capacity) VALUES (%s, %s, %s, %s, %s)",
-                (slp_id, coating_id, project, made_by, formation_capacity if formation_capacity else None)
-            )
-            conn.commit()
-            success = slp_id
-        except Exception as e:
-            conn.rollback()
-            error = str(e)
-        cur.close()
-        conn.close()
- 
-    return templates.TemplateResponse("new_slp.html", {"request": request, "error": error, "success": success})
- 
+        extras, error = clean_optional_fields(optional, numeric_fields={"formation_capacity", "np_ratio"})
+        if not error:
+            error = insert_record("tbl_slp", {**required, **extras})
+        if not error:
+            success, form = slp_id, {}
+
+    return templates.TemplateResponse("new_slp.html", {"request": request, "error": error, "success": success, "form": form})
+
 @app.post("/coincell")
 def create_coincell(coincell_id: str, coating_id: str, project: str, made_by: str):
     coincell_id = coincell_id.strip()
@@ -292,40 +327,32 @@ def new_coincell_form(request: Request):
  
  
 @app.post("/coincell/new", response_class=HTMLResponse)
-def submit_coincell_form(request: Request, coincell_id: str = Form(...), coating_id: str = Form(...), project: str = Form(...), made_by: str = Form(...)):
+def submit_coincell_form(request: Request, coincell_id: str = Form(...), coating_id: str = Form(...), project: str = Form(...), made_by: str = Form(...),
+                         date_made: str = Form(None), electrolyte: str = Form(None), formation_capacity: str = Form(None),
+                         cell_type: str = Form(None)):
     redirect = require_login(request)
     if redirect:
         return redirect
-    coincell_id = coincell_id.strip()
-    coating_id = coating_id.strip()
-    project = project.strip()
-    made_by = made_by.strip()
- 
+    required = {"coincell_id": coincell_id.strip(), "coating_id": coating_id.strip(), "project": project.strip(), "made_by": made_by.strip()}
+    optional = {"date_made": date_made, "electrolyte": electrolyte, "formation_capacity": formation_capacity, "cell_type": cell_type}
+    form = form_state(required, optional)
     error = None
     success = None
- 
-    if not coincell_id or not coating_id or not project or not made_by:
-        error = "All fields are required and cannot be blank."
+
+    coincell_id = required["coincell_id"]
+    if not all(required.values()):
+        error = "Coin cell ID, coating ID, project and made by are required."
     elif coincell_id != coincell_id.upper():
         error = f"Coin Cell ID must be uppercase. Try: {coincell_id.upper()}"
     else:
-        conn = get_connection()
-        cur = conn.cursor()
-        try:
-            cur.execute(
-                "INSERT INTO tbl_coincell (coincell_id, coating_id, project, made_by) VALUES (%s, %s, %s, %s)",
-                (coincell_id, coating_id, project, made_by)
-            )
-            conn.commit()
-            success = coincell_id
-        except Exception as e:
-            conn.rollback()
-            error = str(e)
-        cur.close()
-        conn.close()
- 
-    return templates.TemplateResponse("new_coincell.html", {"request": request, "error": error, "success": success})
- 
+        extras, error = clean_optional_fields(optional, numeric_fields={"formation_capacity"})
+        if not error:
+            error = insert_record("tbl_coincell", {**required, **extras})
+        if not error:
+            success, form = coincell_id, {}
+
+    return templates.TemplateResponse("new_coincell.html", {"request": request, "error": error, "success": success, "form": form})
+
 @app.post("/mlp")
 def create_mlp(mlp_id: str, cat_coating_id: str, an_coating_id: str, project: str):
     mlp_id = mlp_id.strip()
@@ -365,40 +392,32 @@ def new_mlp_form(request: Request):
  
  
 @app.post("/mlp/new", response_class=HTMLResponse)
-def submit_mlp_form(request: Request, mlp_id: str = Form(...), cat_coating_id: str = Form(...), an_coating_id: str = Form(...), project: str = Form(...)):
+def submit_mlp_form(request: Request, mlp_id: str = Form(...), cat_coating_id: str = Form(...), an_coating_id: str = Form(...), project: str = Form(...),
+                    date_made: str = Form(None), electrolyte: str = Form(None), cell_capacity: str = Form(None),
+                    ac_area_ratio: str = Form(None)):
     redirect = require_login(request)
     if redirect:
         return redirect
-    mlp_id = mlp_id.strip()
-    cat_coating_id = cat_coating_id.strip()
-    an_coating_id = an_coating_id.strip()
-    project = project.strip()
- 
+    required = {"mlp_id": mlp_id.strip(), "cat_coating_id": cat_coating_id.strip(), "an_coating_id": an_coating_id.strip(), "project": project.strip()}
+    optional = {"date_made": date_made, "electrolyte": electrolyte, "cell_capacity": cell_capacity, "ac_area_ratio": ac_area_ratio}
+    form = form_state(required, optional)
     error = None
     success = None
- 
-    if not mlp_id or not cat_coating_id or not an_coating_id or not project:
-        error = "All fields are required and cannot be blank."
+
+    mlp_id = required["mlp_id"]
+    if not all(required.values()):
+        error = "MLP ID, both coating IDs and project are required."
     elif mlp_id != mlp_id.upper():
         error = f"MLP ID must be uppercase. Try: {mlp_id.upper()}"
     else:
-        conn = get_connection()
-        cur = conn.cursor()
-        try:
-            cur.execute(
-                "INSERT INTO tbl_mlp (mlp_id, cat_coating_id, an_coating_id, project) VALUES (%s, %s, %s, %s)",
-                (mlp_id, cat_coating_id, an_coating_id, project)
-            )
-            conn.commit()
-            success = mlp_id
-        except Exception as e:
-            conn.rollback()
-            error = str(e)
-        cur.close()
-        conn.close()
- 
-    return templates.TemplateResponse("new_mlp.html", {"request": request, "error": error, "success": success})
- 
+        extras, error = clean_optional_fields(optional, numeric_fields={"cell_capacity", "ac_area_ratio"})
+        if not error:
+            error = insert_record("tbl_mlp", {**required, **extras})
+        if not error:
+            success, form = mlp_id, {}
+
+    return templates.TemplateResponse("new_mlp.html", {"request": request, "error": error, "success": success, "form": form})
+
 @app.get("/directory", response_class=HTMLResponse)
 def directory(request: Request, record_id: str = None):
     record = None
