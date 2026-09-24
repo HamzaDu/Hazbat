@@ -13,6 +13,8 @@ import qrcode
 import io
 import base64
 import os
+import re
+from datetime import datetime
  
 BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:8000")
 app = FastAPI()
@@ -44,7 +46,7 @@ def new_material_form(request: Request):
 FIELD_LABELS = {
     "quantity_kg": "Quantity (kg)", "coat_weight_gsm": "Coat weight (g/m²)", "porosity": "Porosity",
     "formation_capacity": "Formation capacity", "np_ratio": "N/P ratio",
-    "cell_capacity": "Cell capacity", "ac_area_ratio": "A/C area ratio",
+    "cell_capacity": "Cell capacity", "ac_area_ratio": "A/C area ratio", "gsm": "GSM",
 }
 
 
@@ -156,6 +158,146 @@ def load_form_options():
         "cat_coatings": [c for c in coatings if c["electrode"] == "cathode"],
         "an_coatings": [c for c in coatings if c["electrode"] == "anode"],
     }
+
+
+# --- Bulk upload helpers -----------------------------------------------------
+# Cells that mean "no data". Stored as NULL in the database and shown as "—" on every page.
+BLANK_MARKERS = {"", "nan", "nat", "none", "null", "n/a", "na", "-", "—", "–"}
+DATE_FORMATS = ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y", "%d/%m/%y", "%d-%m-%Y", "%d.%m.%Y")
+
+# Required + optional columns for each table's bulk upload. "aliases" lets older
+# spreadsheets keep working (e.g. a "GSM" column on the coatings sheet).
+BULK_SPECS = {
+    "tbl_materials": {"id": "material_id", "required": ["material_id", "chemistry", "supplier"],
+                      "numeric": ["quantity_kg"], "dates": ["date_received"],
+                      "text": ["location", "availability", "notes"], "aliases": {}},
+    "tbl_coating":   {"id": "coating_id", "required": ["coating_id", "material_id", "project", "made_by"],
+                      "numeric": ["coat_weight_gsm", "porosity"], "dates": ["coating_date"],
+                      "text": ["notes"], "aliases": {"gsm": "coat_weight_gsm", "coat_weight": "coat_weight_gsm", "coat_weight_g_m": "coat_weight_gsm", "gsm_g_m": "coat_weight_gsm"}},
+    "tbl_slp":       {"id": "slp_id", "required": ["slp_id", "coating_id", "project", "made_by"],
+                      "numeric": ["formation_capacity", "np_ratio"], "dates": ["date_made"],
+                      "text": ["electrolyte", "notes"], "aliases": {"n_p_ratio": "np_ratio", "formation_capacity_mah": "formation_capacity"}},
+    "tbl_coincell":  {"id": "coincell_id", "required": ["coincell_id", "coating_id", "project", "made_by"],
+                      "numeric": ["formation_capacity", "gsm"], "dates": ["date_made"],
+                      "text": ["electrolyte", "cell_type", "notes"], "aliases": {"gsm_g_m": "gsm", "formation_capacity_mah": "formation_capacity"}},
+    "tbl_mlp":       {"id": "mlp_id", "required": ["mlp_id", "cat_coating_id", "an_coating_id", "project"],
+                      "numeric": ["cell_capacity", "ac_area_ratio"], "dates": ["date_made"],
+                      "text": ["electrolyte"], "aliases": {"a_c_area_ratio": "ac_area_ratio"}},
+}
+
+
+def normalise_header(name) -> str:
+    """'Material ID ' / 'material-id' / 'Quantity (kg)' -> 'material_id' / 'material_id' / 'quantity_kg'."""
+    return re.sub(r"[^a-z0-9]+", "_", str(name).strip().lower()).strip("_")
+
+
+def clean_cell(value):
+    """Tidy one spreadsheet cell; N/A, -, blank etc. become None."""
+    if value is None:
+        return None
+    value = str(value).strip()
+    return None if value.lower() in BLANK_MARKERS else value
+
+
+def parse_date(value: str) -> str:
+    """Accepts 2026-09-24 or 24/09/2026 (UK day-first) etc.; returns ISO YYYY-MM-DD."""
+    for fmt in DATE_FORMATS:
+        try:
+            return datetime.strptime(value, fmt).date().isoformat()
+        except ValueError:
+            continue
+    raise ValueError(f"'{value}' is not a valid date (use YYYY-MM-DD or DD/MM/YYYY).")
+
+
+def read_upload(contents: bytes, filename: str):
+    """Read a CSV/Excel upload as text so nothing is silently converted. Returns a list of row dicts."""
+    buffer = io.BytesIO(contents)
+    if filename.lower().endswith(".csv"):
+        df = pd.read_csv(buffer, dtype=str, keep_default_na=False)
+    else:
+        df = pd.read_excel(buffer, dtype=str)
+    return df.to_dict("records")
+
+
+def process_bulk_upload(rows, table: str, check=None):
+    """Validate and insert each row. check(values) may return an error message for a row.
+    Returns {"success": [...ids], "failed": [{"row", "reason"}], "ignored": [...unknown columns]}."""
+    spec = BULK_SPECS[table]
+    known = spec["required"] + spec["numeric"] + spec["dates"] + spec["text"]
+    success, failed, ignored = [], [], set()
+
+    for i, raw in enumerate(rows):
+        row_num = i + 2  # +2 = header row + 1-based numbering, matching the spreadsheet
+        values = {}
+        for header, cell in raw.items():
+            key = normalise_header(header)
+            key = spec["aliases"].get(key, key)
+            if key in known:
+                values[key] = clean_cell(cell)
+            elif key and not key.startswith("unnamed"):
+                ignored.add(str(header).strip())
+
+        if all(values.get(k) is None for k in known):
+            continue  # completely empty row, e.g. trailing blank lines in Excel
+
+        missing = [k for k in spec["required"] if not values.get(k)]
+        if missing:
+            failed.append({"row": row_num, "reason": f"Missing required field(s): {', '.join(missing)}."})
+            continue
+
+        record_id = values[spec["id"]]
+        if record_id != record_id.upper():
+            failed.append({"row": row_num, "reason": f"'{record_id}' is not uppercase."})
+            continue
+
+        error = check(values) if check else None
+        if error:
+            failed.append({"row": row_num, "reason": error})
+            continue
+
+        try:
+            for field in spec["dates"]:
+                if values.get(field):
+                    values[field] = parse_date(values[field])
+        except ValueError as e:
+            failed.append({"row": row_num, "reason": str(e)})
+            continue
+
+        optional = {k: values.get(k) for k in spec["numeric"] + spec["dates"] + spec["text"]}
+        extras, error = clean_optional_fields(optional, numeric_fields=set(spec["numeric"]))
+        if error:
+            failed.append({"row": row_num, "reason": error})
+            continue
+
+        error = insert_record(table, {**{k: values[k] for k in spec["required"]}, **extras})
+        if error:
+            failed.append({"row": row_num, "reason": error})
+        else:
+            success.append(record_id)
+
+    return {"success": success, "failed": failed, "ignored": sorted(ignored)}
+
+
+def check_material_row(v):
+    if not (v["material_id"].startswith("CAT-") or v["material_id"].startswith("AN-")):
+        return f"'{v['material_id']}' must start with CAT- or AN-."
+
+
+def check_coating_row(v):
+    if not record_exists("tbl_materials", "material_id", v["material_id"]):
+        return f"Material {v['material_id']} doesn't exist."
+
+
+def check_cell_row(v):
+    if not record_exists("tbl_coating", "coating_id", v["coating_id"]):
+        return f"Coating {v['coating_id']} doesn't exist."
+
+
+def check_mlp_row(v):
+    if coating_electrode(v["cat_coating_id"]) != "cathode":
+        return f"{v['cat_coating_id']} isn't an existing cathode (CAT-) coating."
+    if coating_electrode(v["an_coating_id"]) != "anode":
+        return f"{v['an_coating_id']} isn't an existing anode (AN-) coating."
 
 
 @app.post("/materials/new", response_class=HTMLResponse)
@@ -394,12 +536,13 @@ def new_coincell_form(request: Request):
 @app.post("/coincell/new", response_class=HTMLResponse)
 def submit_coincell_form(request: Request, coincell_id: str = Form(...), coating_id: str = Form(...), project: str = Form(...), made_by: str = Form(...),
                          date_made: str = Form(None), electrolyte: str = Form(None), formation_capacity: str = Form(None),
-                         cell_type: str = Form(None)):
+                         cell_type: str = Form(None), gsm: str = Form(None), notes: str = Form(None)):
     redirect = require_login(request)
     if redirect:
         return redirect
     required = {"coincell_id": coincell_id.strip(), "coating_id": coating_id.strip(), "project": project.strip(), "made_by": made_by.strip()}
-    optional = {"date_made": date_made, "electrolyte": electrolyte, "formation_capacity": formation_capacity, "cell_type": cell_type}
+    optional = {"date_made": date_made, "electrolyte": electrolyte, "formation_capacity": formation_capacity,
+                "cell_type": cell_type, "gsm": gsm, "notes": notes}
     form = form_state(required, optional)
     error = None
     success = None
@@ -412,7 +555,7 @@ def submit_coincell_form(request: Request, coincell_id: str = Form(...), coating
     elif not record_exists("tbl_coating", "coating_id", required["coating_id"]):
         error = f"Coating {required['coating_id']} doesn't exist yet. Pick one from the list or create it first."
     else:
-        extras, error = clean_optional_fields(optional, numeric_fields={"formation_capacity"})
+        extras, error = clean_optional_fields(optional, numeric_fields={"formation_capacity", "gsm"})
         if not error:
             error = insert_record("tbl_coincell", {**required, **extras})
         if not error:
@@ -502,11 +645,11 @@ def directory(request: Request, record_id: str = None):
  
         if record_type == "material":
             cur.execute(
-                "SELECT chemistry, supplier, date_received, quantity_kg, location, availability "
+                "SELECT chemistry, supplier, date_received, quantity_kg, location, availability, notes "
                 "FROM tbl_materials WHERE material_id = %s",
                 (record_id,)
             )
-            columns = ["chemistry", "supplier", "date_received", "quantity_kg", "location", "availability"]
+            columns = ["chemistry", "supplier", "date_received", "quantity_kg", "location", "availability", "notes"]
             row = cur.fetchone()
             if row:
                 record = dict(zip(columns, row))
@@ -516,11 +659,11 @@ def directory(request: Request, record_id: str = None):
  
         elif record_type == "coating":
             cur.execute(
-                "SELECT material_id, project, coating_date, made_by, coat_weight_gsm, porosity "
+                "SELECT material_id, project, coating_date, made_by, coat_weight_gsm, porosity, notes "
                 "FROM tbl_coating WHERE coating_id = %s",
                 (record_id,)
             )
-            columns = ["material_id", "project", "coating_date", "made_by", "coat_weight_gsm", "porosity"]
+            columns = ["material_id", "project", "coating_date", "made_by", "coat_weight_gsm", "porosity", "notes"]
             row = cur.fetchone()
             if row:
                 record = dict(zip(columns, row))
@@ -541,11 +684,11 @@ def directory(request: Request, record_id: str = None):
  
         elif record_type == "slp":
             cur.execute(
-                "SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity "
+                "SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity, np_ratio, notes "
                 "FROM tbl_slp WHERE slp_id = %s",
                 (record_id,)
             )
-            columns = ["coating_id", "project", "date_made", "made_by", "electrolyte", "formation_capacity"]
+            columns = ["coating_id", "project", "date_made", "made_by", "electrolyte", "formation_capacity", "np_ratio", "notes"]
             row = cur.fetchone()
             if row:
                 record = dict(zip(columns, row))
@@ -555,11 +698,11 @@ def directory(request: Request, record_id: str = None):
  
         elif record_type == "coincell":
             cur.execute(
-                "SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity "
+                "SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity, cell_type, gsm, notes "
                 "FROM tbl_coincell WHERE coincell_id = %s",
                 (record_id,)
             )
-            columns = ["coating_id", "project", "date_made", "made_by", "electrolyte", "formation_capacity"]
+            columns = ["coating_id", "project", "date_made", "made_by", "electrolyte", "formation_capacity", "cell_type", "gsm", "notes"]
             row = cur.fetchone()
             if row:
                 record = dict(zip(columns, row))
@@ -569,11 +712,11 @@ def directory(request: Request, record_id: str = None):
  
         elif record_type == "mlp":
             cur.execute(
-                "SELECT cat_coating_id, an_coating_id, project, date_made, cell_capacity "
+                "SELECT cat_coating_id, an_coating_id, project, date_made, cell_capacity, electrolyte, ac_area_ratio "
                 "FROM tbl_mlp WHERE mlp_id = %s",
                 (record_id,)
             )
-            columns = ["cat_coating_id", "an_coating_id", "project", "date_made", "cell_capacity"]
+            columns = ["cat_coating_id", "an_coating_id", "project", "date_made", "cell_capacity", "electrolyte", "ac_area_ratio"]
             row = cur.fetchone()
             if row:
                 record = dict(zip(columns, row))
@@ -737,56 +880,12 @@ async def bulk_upload_materials(request: Request, file: UploadFile = File(...)):
     redirect = require_login(request)
     if redirect:
         return redirect
-    contents = await file.read()
- 
-    if file.filename.endswith(".csv"):
-        df = pd.read_csv(pd.io.common.BytesIO(contents))
-    else:
-        df = pd.read_excel(pd.io.common.BytesIO(contents))
- 
-    success = []
-    failed = []
- 
-    conn = get_connection()
-    cur = conn.cursor()
- 
-    for i, row in df.iterrows():
-        row_num = i + 2  # +2 accounts for the header row and 0-indexing
- 
-        material_id = str(row.get("material_id", "")).strip()
-        chemistry = str(row.get("chemistry", "")).strip()
-        supplier = str(row.get("supplier", "")).strip()
- 
-        if not material_id or not chemistry or not supplier or material_id == "nan":
-            failed.append({"row": row_num, "reason": "Missing required field(s)."})
-            continue
- 
-        if material_id != material_id.upper():
-            failed.append({"row": row_num, "reason": f"'{material_id}' is not uppercase."})
-            continue
- 
-        if not (material_id.startswith("CAT-") or material_id.startswith("AN-")):
-            failed.append({"row": row_num, "reason": f"'{material_id}' must start with CAT- or AN-."})
-            continue
- 
-        try:
-            cur.execute(
-                "INSERT INTO tbl_materials (material_id, chemistry, supplier) VALUES (%s, %s, %s)",
-                (material_id, chemistry, supplier)
-            )
-            conn.commit()
-            success.append(material_id)
-        except Exception as e:
-            conn.rollback()
-            failed.append({"row": row_num, "reason": str(e)})
- 
-    cur.close()
-    conn.close()
- 
-    return templates.TemplateResponse(
-        "bulk_upload.html",
-        {"request": request, "results": {"success": success, "failed": failed}}
-    )
+    try:
+        rows = read_upload(await file.read(), file.filename)
+    except Exception as e:
+        return templates.TemplateResponse("bulk_upload.html", {"request": request, "upload_error": f"Couldn't read that file: {e}"})
+    results = process_bulk_upload(rows, "tbl_materials", check=check_material_row)
+    return templates.TemplateResponse("bulk_upload.html", {"request": request, "results": results})
  
 @app.get("/coatings/bulk-upload", response_class=HTMLResponse)
 def bulk_upload_coating_form(request: Request):
@@ -801,53 +900,12 @@ async def bulk_upload_coatings(request: Request, file: UploadFile = File(...)):
     redirect = require_login(request)
     if redirect:
         return redirect
-    contents = await file.read()
- 
-    if file.filename.endswith(".csv"):
-        df = pd.read_csv(pd.io.common.BytesIO(contents))
-    else:
-        df = pd.read_excel(pd.io.common.BytesIO(contents))
- 
-    success = []
-    failed = []
- 
-    conn = get_connection()
-    cur = conn.cursor()
- 
-    for i, row in df.iterrows():
-        row_num = i + 2
- 
-        coating_id = str(row.get("coating_id", "")).strip()
-        material_id = str(row.get("material_id", "")).strip()
-        project = str(row.get("project", "")).strip()
-        made_by = str(row.get("made_by", "")).strip()
- 
-        if not coating_id or not material_id or not project or not made_by or coating_id == "nan":
-            failed.append({"row": row_num, "reason": "Missing required field(s)."})
-            continue
- 
-        if coating_id != coating_id.upper():
-            failed.append({"row": row_num, "reason": f"'{coating_id}' is not uppercase."})
-            continue
- 
-        try:
-            cur.execute(
-                "INSERT INTO tbl_coating (coating_id, material_id, project, made_by) VALUES (%s, %s, %s, %s)",
-                (coating_id, material_id, project, made_by)
-            )
-            conn.commit()
-            success.append(coating_id)
-        except Exception as e:
-            conn.rollback()
-            failed.append({"row": row_num, "reason": str(e)})
- 
-    cur.close()
-    conn.close()
- 
-    return templates.TemplateResponse(
-        "bulk_upload_coating.html",
-        {"request": request, "results": {"success": success, "failed": failed}}
-    )
+    try:
+        rows = read_upload(await file.read(), file.filename)
+    except Exception as e:
+        return templates.TemplateResponse("bulk_upload_coating.html", {"request": request, "upload_error": f"Couldn't read that file: {e}"})
+    results = process_bulk_upload(rows, "tbl_coating", check=check_coating_row)
+    return templates.TemplateResponse("bulk_upload_coating.html", {"request": request, "results": results})
  
 @app.get("/slp/bulk-upload", response_class=HTMLResponse)
 def bulk_upload_slp_form(request: Request):
@@ -862,49 +920,13 @@ async def bulk_upload_slp(request: Request, file: UploadFile = File(...)):
     redirect = require_login(request)
     if redirect:
         return redirect
-    contents = await file.read()
-    df = pd.read_csv(pd.io.common.BytesIO(contents)) if file.filename.endswith(".csv") else pd.read_excel(pd.io.common.BytesIO(contents))
+    try:
+        rows = read_upload(await file.read(), file.filename)
+    except Exception as e:
+        return templates.TemplateResponse("bulk_upload_slp.html", {"request": request, "upload_error": f"Couldn't read that file: {e}"})
+    results = process_bulk_upload(rows, "tbl_slp", check=check_cell_row)
+    return templates.TemplateResponse("bulk_upload_slp.html", {"request": request, "results": results})
  
-    success = []
-    failed = []
-    conn = get_connection()
-    cur = conn.cursor()
- 
-    for i, row in df.iterrows():
-        row_num = i + 2
-        slp_id = str(row.get("slp_id", "")).strip()
-        coating_id = str(row.get("coating_id", "")).strip()
-        project = str(row.get("project", "")).strip()
-        made_by = str(row.get("made_by", "")).strip()
-        fc_raw = row.get("formation_capacity", None)
-        try:
-            formation_capacity = None if pd.isna(fc_raw) else float(fc_raw)
-        except (ValueError, TypeError):
-            failed.append({"row": row_num, "reason": f"'{fc_raw}' is not a valid number for formation_capacity."})
-            continue
- 
-        if not slp_id or not coating_id or not project or not made_by or slp_id == "nan":
-            failed.append({"row": row_num, "reason": "Missing required field(s)."})
-            continue
-        if slp_id != slp_id.upper():
-            failed.append({"row": row_num, "reason": f"'{slp_id}' is not uppercase."})
-            continue
- 
-        try:
-            cur.execute(
-                "INSERT INTO tbl_slp (slp_id, coating_id, project, made_by, formation_capacity) VALUES (%s, %s, %s, %s, %s)",
-                (slp_id, coating_id, project, made_by, formation_capacity)
-            )
-            conn.commit()
-            success.append(slp_id)
-        except Exception as e:
-            conn.rollback()
-            failed.append({"row": row_num, "reason": str(e)})
- 
-    cur.close()
-    conn.close()
-    return templates.TemplateResponse("bulk_upload_slp.html", {"request": request, "results": {"success": success, "failed": failed}})
-
 @app.get("/coincell/bulk-upload", response_class=HTMLResponse)
 def bulk_upload_coincell_form(request: Request):
     redirect = require_login(request)
@@ -917,53 +939,13 @@ async def bulk_upload_coincell(request: Request, file: UploadFile = File(...)):
     redirect = require_login(request)
     if redirect:
         return redirect
-    contents = await file.read()
-    df = pd.read_csv(pd.io.common.BytesIO(contents)) if file.filename.endswith(".csv") else pd.read_excel(pd.io.common.BytesIO(contents))
-
-    success = []
-    failed = []
-    conn = get_connection()
-    cur = conn.cursor()
-
-    for i, row in df.iterrows():
-        row_num = i + 2
-        coincell_id = str(row.get("coincell_id", "")).strip()
-        coating_id = str(row.get("coating_id", "")).strip()
-        project = str(row.get("project", "")).strip()
-        made_by = str(row.get("made_by", "")).strip()
-        notes = str(row.get("Notes", "")).strip()
-        if notes == "nan":
-            notes = None
-
-        gsm_raw = row.get("GSM", None)
-        try:
-            gsm = None if pd.isna(gsm_raw) else float(gsm_raw)
-        except (ValueError, TypeError):
-            failed.append({"row": row_num, "reason": f"'{gsm_raw}' is not a valid number for GSM."})
-            continue
-
-        if not coincell_id or not coating_id or not project or not made_by or coincell_id == "nan":
-            failed.append({"row": row_num, "reason": "Missing required field(s)."})
-            continue
-        if coincell_id != coincell_id.upper():
-            failed.append({"row": row_num, "reason": f"'{coincell_id}' is not uppercase."})
-            continue
-
-        try:
-            cur.execute(
-                "INSERT INTO tbl_coincell (coincell_id, coating_id, project, made_by, gsm, notes) VALUES (%s, %s, %s, %s, %s, %s)",
-                (coincell_id, coating_id, project, made_by, gsm, notes)
-            )
-            conn.commit()
-            success.append(coincell_id)
-        except Exception as e:
-            conn.rollback()
-            failed.append({"row": row_num, "reason": str(e)})
-
-    cur.close()
-    conn.close()
-    return templates.TemplateResponse("bulk_upload_coincell.html", {"request": request, "results": {"success": success, "failed": failed}})
-
+    try:
+        rows = read_upload(await file.read(), file.filename)
+    except Exception as e:
+        return templates.TemplateResponse("bulk_upload_coincell.html", {"request": request, "upload_error": f"Couldn't read that file: {e}"})
+    results = process_bulk_upload(rows, "tbl_coincell", check=check_cell_row)
+    return templates.TemplateResponse("bulk_upload_coincell.html", {"request": request, "results": results})
+ 
 @app.get("/mlp/bulk-upload", response_class=HTMLResponse)
 def bulk_upload_mlp_form(request: Request):
     redirect = require_login(request)
@@ -977,42 +959,12 @@ async def bulk_upload_mlp(request: Request, file: UploadFile = File(...)):
     redirect = require_login(request)
     if redirect:
         return redirect
-    contents = await file.read()
-    df = pd.read_csv(pd.io.common.BytesIO(contents)) if file.filename.endswith(".csv") else pd.read_excel(pd.io.common.BytesIO(contents))
- 
-    success = []
-    failed = []
-    conn = get_connection()
-    cur = conn.cursor()
- 
-    for i, row in df.iterrows():
-        row_num = i + 2
-        mlp_id = str(row.get("mlp_id", "")).strip()
-        cat_coating_id = str(row.get("cat_coating_id", "")).strip()
-        an_coating_id = str(row.get("an_coating_id", "")).strip()
-        project = str(row.get("project", "")).strip()
- 
-        if not mlp_id or not cat_coating_id or not an_coating_id or not project or mlp_id == "nan":
-            failed.append({"row": row_num, "reason": "Missing required field(s)."})
-            continue
-        if mlp_id != mlp_id.upper():
-            failed.append({"row": row_num, "reason": f"'{mlp_id}' is not uppercase."})
-            continue
- 
-        try:
-            cur.execute(
-                "INSERT INTO tbl_mlp (mlp_id, cat_coating_id, an_coating_id, project) VALUES (%s, %s, %s, %s)",
-                (mlp_id, cat_coating_id, an_coating_id, project)
-            )
-            conn.commit()
-            success.append(mlp_id)
-        except Exception as e:
-            conn.rollback()
-            failed.append({"row": row_num, "reason": str(e)})
- 
-    cur.close()
-    conn.close()
-    return templates.TemplateResponse("bulk_upload_mlp.html", {"request": request, "results": {"success": success, "failed": failed}})
+    try:
+        rows = read_upload(await file.read(), file.filename)
+    except Exception as e:
+        return templates.TemplateResponse("bulk_upload_mlp.html", {"request": request, "upload_error": f"Couldn't read that file: {e}"})
+    results = process_bulk_upload(rows, "tbl_mlp", check=check_mlp_row)
+    return templates.TemplateResponse("bulk_upload_mlp.html", {"request": request, "results": results})
  
 @app.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
@@ -1063,24 +1015,24 @@ def view_card(request: Request, record_id: str):
 
     if record_type == "material":
         cur.execute(
-            "SELECT chemistry, supplier, date_received, quantity_kg, location, availability "
+            "SELECT chemistry, supplier, date_received, quantity_kg, location, availability, notes "
             "FROM tbl_materials WHERE material_id = %s", (record_id,)
         )
         row = cur.fetchone()
         if row:
-            columns = ["Chemistry", "Supplier", "Date Received", "Quantity (kg)", "Location", "Availability"]
+            columns = ["Chemistry", "Supplier", "Date Received", "Quantity (kg)", "Location", "Availability", "Notes"]
             record = dict(zip(columns, row))
             cur.execute("SELECT coating_id FROM tbl_coating WHERE material_id = %s", (record_id,))
             chain += [f"Coating: {r[0]}" for r in cur.fetchall()]
 
     elif record_type == "coating":
         cur.execute(
-            "SELECT material_id, project, coating_date, made_by, coat_weight_gsm, porosity "
+            "SELECT material_id, project, coating_date, made_by, coat_weight_gsm, porosity, notes "
             "FROM tbl_coating WHERE coating_id = %s", (record_id,)
         )
         row = cur.fetchone()
         if row:
-            columns = ["Material ID", "Project", "Coating Date", "Made By", "GSM", "Porosity"]
+            columns = ["Material ID", "Project", "Coating Date", "Made By", "GSM", "Porosity", "Notes"]
             record = dict(zip(columns, row))
             cur.execute("SELECT slp_id FROM tbl_slp WHERE coating_id = %s", (record_id,))
             chain += [f"SLP: {r[0]}" for r in cur.fetchall()]
@@ -1091,31 +1043,31 @@ def view_card(request: Request, record_id: str):
 
     elif record_type == "slp":
         cur.execute(
-            "SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity "
+            "SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity, np_ratio, notes "
             "FROM tbl_slp WHERE slp_id = %s", (record_id,)
         )
         row = cur.fetchone()
         if row:
-            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity"]
+            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity", "N/P Ratio", "Notes"]
             record = dict(zip(columns, row))
             chain.append(f"Coating: {record['Coating ID']}")
 
     elif record_type == "coincell":
-        cur.execute("SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity, gsm, notes FROM tbl_coincell WHERE coincell_id = %s", (record_id,))
+        cur.execute("SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity, gsm, notes, cell_type FROM tbl_coincell WHERE coincell_id = %s", (record_id,))
         row = cur.fetchone()
         if row:
-            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity", "GSM", "Notes"]
+            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity", "GSM", "Notes", "Cell Type"]
             record = dict(zip(columns, [str(v) if v is not None else "N/A" for v in row]))
             chain = [f"Coating: {record['Coating ID']}"]
 
     elif record_type == "mlp":
         cur.execute(
-            "SELECT cat_coating_id, an_coating_id, project, date_made, cell_capacity "
+            "SELECT cat_coating_id, an_coating_id, project, date_made, cell_capacity, electrolyte, ac_area_ratio "
             "FROM tbl_mlp WHERE mlp_id = %s", (record_id,)
         )
         row = cur.fetchone()
         if row:
-            columns = ["Cathode Coating", "Anode Coating", "Project", "Date Made", "Cell Capacity"]
+            columns = ["Cathode Coating", "Anode Coating", "Project", "Date Made", "Cell Capacity", "Electrolyte", "A/C Area Ratio"]
             record = dict(zip(columns, row))
             chain.append(f"Cathode: {record['Cathode Coating']}")
             chain.append(f"Anode: {record['Anode Coating']}")
@@ -1143,19 +1095,19 @@ def card_data(record_id: str):
     chain = []
 
     if record_type == "material":
-        cur.execute("SELECT chemistry, supplier, date_received, quantity_kg, location, availability FROM tbl_materials WHERE material_id = %s", (record_id,))
+        cur.execute("SELECT chemistry, supplier, date_received, quantity_kg, location, availability, notes FROM tbl_materials WHERE material_id = %s", (record_id,))
         row = cur.fetchone()
         if row:
-            columns = ["Chemistry", "Supplier", "Date Received", "Quantity (kg)", "Location", "Availability"]
+            columns = ["Chemistry", "Supplier", "Date Received", "Quantity (kg)", "Location", "Availability", "Notes"]
             record = dict(zip(columns, [str(v) if v is not None else "N/A" for v in row]))
             cur.execute("SELECT coating_id FROM tbl_coating WHERE material_id = %s", (record_id,))
             chain = [f"Coating: {r[0]}" for r in cur.fetchall()]
 
     elif record_type == "coating":
-        cur.execute("SELECT material_id, project, coating_date, made_by, coat_weight_gsm, porosity FROM tbl_coating WHERE coating_id = %s", (record_id,))
+        cur.execute("SELECT material_id, project, coating_date, made_by, coat_weight_gsm, porosity, notes FROM tbl_coating WHERE coating_id = %s", (record_id,))
         row = cur.fetchone()
         if row:
-            columns = ["Material ID", "Project", "Coating Date", "Made By", "GSM", "Porosity"]
+            columns = ["Material ID", "Project", "Coating Date", "Made By", "GSM", "Porosity", "Notes"]
             record = dict(zip(columns, [str(v) if v is not None else "N/A" for v in row]))
             cur.execute("SELECT slp_id FROM tbl_slp WHERE coating_id = %s", (record_id,))
             chain += [f"SLP: {r[0]}" for r in cur.fetchall()]
@@ -1165,26 +1117,26 @@ def card_data(record_id: str):
             chain += [f"MLP: {r[0]}" for r in cur.fetchall()]
 
     elif record_type == "slp":
-        cur.execute("SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity FROM tbl_slp WHERE slp_id = %s", (record_id,))
+        cur.execute("SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity, np_ratio, notes FROM tbl_slp WHERE slp_id = %s", (record_id,))
         row = cur.fetchone()
         if row:
-            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity"]
+            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity", "N/P Ratio", "Notes"]
             record = dict(zip(columns, [str(v) if v is not None else "N/A" for v in row]))
             chain = [f"Coating: {record['Coating ID']}"]
 
     elif record_type == "coincell":
-        cur.execute("SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity, gsm, notes FROM tbl_coincell WHERE coincell_id = %s", (record_id,))
+        cur.execute("SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity, gsm, notes, cell_type FROM tbl_coincell WHERE coincell_id = %s", (record_id,))
         row = cur.fetchone()
         if row:
-            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity", "GSM", "Notes"]
+            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity", "GSM", "Notes", "Cell Type"]
             record = dict(zip(columns, [str(v) if v is not None else "N/A" for v in row]))
             chain = [f"Coating: {record['Coating ID']}"]
 
     elif record_type == "mlp":
-        cur.execute("SELECT cat_coating_id, an_coating_id, project, date_made, cell_capacity FROM tbl_mlp WHERE mlp_id = %s", (record_id,))
+        cur.execute("SELECT cat_coating_id, an_coating_id, project, date_made, cell_capacity, electrolyte, ac_area_ratio FROM tbl_mlp WHERE mlp_id = %s", (record_id,))
         row = cur.fetchone()
         if row:
-            columns = ["Cathode Coating", "Anode Coating", "Project", "Date Made", "Cell Capacity"]
+            columns = ["Cathode Coating", "Anode Coating", "Project", "Date Made", "Cell Capacity", "Electrolyte", "A/C Area Ratio"]
             record = dict(zip(columns, [str(v) if v is not None else "N/A" for v in row]))
             chain = [f"Cathode: {record['Cathode Coating']}", f"Anode: {record['Anode Coating']}"]
 
@@ -1212,12 +1164,12 @@ def card_data(record_id: str):
 
     if record_type == "coating":
         cur.execute(
-            "SELECT material_id, project, coating_date, made_by, coat_weight_gsm, porosity "
+            "SELECT material_id, project, coating_date, made_by, coat_weight_gsm, porosity, notes "
             "FROM tbl_coating WHERE coating_id = %s", (record_id,)
         )
         row = cur.fetchone()
         if row:
-            columns = ["Material ID", "Project", "Coating Date", "Made By", "GSM", "Porosity"]
+            columns = ["Material ID", "Project", "Coating Date", "Made By", "GSM", "Porosity", "Notes"]
             record = dict(zip(columns, row))
             cur.execute("SELECT slp_id FROM tbl_slp WHERE coating_id = %s", (record_id,))
             chain += [f"SLP: {r[0]}" for r in cur.fetchall()]
@@ -1228,46 +1180,46 @@ def card_data(record_id: str):
 
     elif record_type == "material":
         cur.execute(
-            "SELECT chemistry, supplier, date_received, quantity_kg, location, availability "
+            "SELECT chemistry, supplier, date_received, quantity_kg, location, availability, notes "
             "FROM tbl_materials WHERE material_id = %s", (record_id,)
         )
     elif record_type == "slp":
         cur.execute(
-            "SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity "
+            "SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity, np_ratio, notes "
             "FROM tbl_slp WHERE slp_id = %s", (record_id,)
         )
         row = cur.fetchone()
         if row:
-            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity"]
+            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity", "N/P Ratio", "Notes"]
             record = dict(zip(columns, row))
             chain.append(f"Coating: {record['Coating ID']}")
 
     elif record_type == "coincell":
         cur.execute(
-            "SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity "
+            "SELECT coating_id, project, date_made, made_by, electrolyte, formation_capacity, cell_type, gsm, notes "
             "FROM tbl_coincell WHERE coincell_id = %s", (record_id,)
         )
         row = cur.fetchone()
         if row:
-            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity"]
+            columns = ["Coating ID", "Project", "Date Made", "Made By", "Electrolyte", "Formation Capacity", "Cell Type", "GSM", "Notes"]
             record = dict(zip(columns, row))
             chain.append(f"Coating: {record['Coating ID']}")
 
     elif record_type == "mlp":
         cur.execute(
-            "SELECT cat_coating_id, an_coating_id, project, date_made, cell_capacity "
+            "SELECT cat_coating_id, an_coating_id, project, date_made, cell_capacity, electrolyte, ac_area_ratio "
             "FROM tbl_mlp WHERE mlp_id = %s", (record_id,)
         )
         row = cur.fetchone()
         if row:
-            columns = ["Cathode Coating", "Anode Coating", "Project", "Date Made", "Cell Capacity"]
+            columns = ["Cathode Coating", "Anode Coating", "Project", "Date Made", "Cell Capacity", "Electrolyte", "A/C Area Ratio"]
             record = dict(zip(columns, row))
             chain.append(f"Cathode: {record['Cathode Coating']}")
             chain.append(f"Anode: {record['Anode Coating']}")
         
         row = cur.fetchone()
         if row:
-            columns = ["Chemistry", "Supplier", "Date Received", "Quantity (kg)", "Location", "Availability"]
+            columns = ["Chemistry", "Supplier", "Date Received", "Quantity (kg)", "Location", "Availability", "Notes"]
             record = dict(zip(columns, row))
             cur.execute("SELECT coating_id FROM tbl_coating WHERE material_id = %s", (record_id,))
             chain += [f"Coating: {r[0]}" for r in cur.fetchall()]

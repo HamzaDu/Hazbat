@@ -55,7 +55,8 @@ CREATE TABLE tbl_coincell (
     electrolyte            TEXT,
     formation_capacity     NUMERIC,
     cell_type              TEXT,
-    gsm                    TEXT
+    gsm                    NUMERIC,
+    notes                  TEXT
 );
 
 CREATE TABLE tbl_mlp (
@@ -67,4 +68,12 @@ CREATE TABLE tbl_mlp (
     electrolyte           TEXT,
     cell_capacity         NUMERIC,
     ac_area_ratio         NUMERIC
+);
+
+CREATE TABLE tbl_users (
+    user_id         SERIAL PRIMARY KEY,
+    username        TEXT UNIQUE NOT NULL,
+    password_hash   TEXT NOT NULL,
+    full_name       TEXT,
+    is_admin        BOOLEAN NOT NULL DEFAULT FALSE
 );
