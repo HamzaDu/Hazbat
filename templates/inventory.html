@@ -4,7 +4,9 @@
 <h1>{{ title }} Inventory</h1>
 <p>
     <a href="{{ new_url }}">+ New</a> &nbsp;|&nbsp;
-    <a href="{{ bulk_url }}">Bulk Upload</a>
+    <a href="{{ bulk_url }}">Bulk Upload</a> &nbsp;|&nbsp;
+    <a href="{{ request.url.path }}/export?format=xlsx">Export to Excel</a> &nbsp;|&nbsp;
+    <a href="{{ request.url.path }}/export?format=csv">Export to CSV</a>
 </p>
 <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
     <thead>

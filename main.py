@@ -8,7 +8,7 @@ from HAZbot import ask_ai_for_sql
 import pandas as pd
 from fastapi import UploadFile, File
 from starlette.middleware.sessions import SessionMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 import qrcode
 import io
 import base64
@@ -867,6 +867,75 @@ def inventory_mlp(request: Request):
          "new_url": "/mlp/new", "bulk_url": "/mlp/bulk-upload"}
     )
  
+
+# --- Export an inventory table to CSV or Excel --------------------------------
+# URL key -> (table, ID column used for sorting, sheet/file name)
+EXPORT_TABLES = {
+    "materials": ("tbl_materials", "material_id", "Materials"),
+    "coatings":  ("tbl_coating", "coating_id", "Coatings"),
+    "slp":       ("tbl_slp", "slp_id", "SLP"),
+    "coincell":  ("tbl_coincell", "coincell_id", "CoinCells"),
+    "mlp":       ("tbl_mlp", "mlp_id", "MLP"),
+}
+EXPORT_BLANK = "N/A"  # empty cells are written as N/A (bulk upload reads N/A back as "no data")
+
+
+@app.get("/inventory/{table_key}/export")
+def export_inventory(request: Request, table_key: str, format: str = "csv"):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+    if table_key not in EXPORT_TABLES or format not in ("csv", "xlsx"):
+        return HTMLResponse("Unknown table or format.", status_code=404)
+    table, id_column, name = EXPORT_TABLES[table_key]
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        # Every column, so the file has all fields and can be re-uploaded through Bulk Upload.
+        # Same project filter as the inventory pages (materials have no project column).
+        allowed = get_allowed_projects(request)
+        if allowed is None or table == "tbl_materials":
+            cur.execute(f"SELECT * FROM {table} ORDER BY {id_column}")
+        else:
+            cur.execute(f"SELECT * FROM {table} WHERE project = ANY(%s) ORDER BY {id_column}", (list(allowed),))
+        columns = [d[0] for d in cur.description]
+        rows = cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+    df = pd.DataFrame(rows, columns=columns).astype(object)
+    df = df.where(df.notna(), EXPORT_BLANK)
+    from datetime import date  # local import keeps this change separate from other open PRs
+    filename = f"hazbat_{table_key}_{date.today().isoformat()}.{format}"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+
+    if format == "csv":
+        # utf-8-sig so Excel opens symbols such as ² and µ correctly
+        data = df.to_csv(index=False).encode("utf-8-sig")
+        return Response(content=data, media_type="text/csv", headers=headers)
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name=name)
+        sheet = writer.sheets[name]
+        sheet.freeze_panes = "A2"  # keep the header row visible when scrolling
+        for cell in sheet[1]:
+            cell.font = cell.font.copy(bold=True)
+        for row in sheet.iter_rows(min_row=2):
+            for cell in row:
+                if cell.is_date:
+                    cell.number_format = "yyyy-mm-dd"  # show 2026-09-24, not 2026-09-24 00:00:00
+        for column_cells in sheet.columns:
+            width = max(len(str(c.value)) if c.value is not None else 0 for c in column_cells)
+            sheet.column_dimensions[column_cells[0].column_letter].width = min(max(width + 2, 10), 50)
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
 @app.get("/api/chart/formation-capacity")
 def chart_formation_capacity():
     conn = get_connection()
