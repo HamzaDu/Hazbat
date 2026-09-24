@@ -48,6 +48,14 @@
             <label for="formation_capacity">Formation Capacity (mAh)</label>
             <input type="number" id="formation_capacity" name="formation_capacity" step="any" min="0" placeholder="e.g. 4.2" value="{{ f.get("formation_capacity", "") }}">
         </div>
+        <div class="field">
+            <label for="gsm">GSM (g/m²)</label>
+            <input type="number" id="gsm" name="gsm" step="any" min="0" placeholder="e.g. 145" value="{{ f.get("gsm", "") }}">
+        </div>
+        <div class="field field-wide">
+            <label for="notes">Notes</label>
+            <textarea id="notes" name="notes" rows="3" placeholder="Mixer, trial run, anything unusual…">{{ f.get("notes", "") }}</textarea>
+        </div>
         </div>
     </fieldset>
 
