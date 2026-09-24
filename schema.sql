@@ -54,7 +54,8 @@ CREATE TABLE tbl_coincell (
     made_by                TEXT,
     electrolyte            TEXT,
     formation_capacity     NUMERIC,
-    cell_type              TEXT
+    cell_type              TEXT,
+    gsm                    TEXT
 );
 
 CREATE TABLE tbl_mlp (
