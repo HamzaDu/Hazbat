@@ -6,3 +6,4 @@ schema.sql
 uploads/
 *.mpr
 test_mpr.py
+*.session.sql

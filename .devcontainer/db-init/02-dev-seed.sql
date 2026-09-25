@@ -16,6 +16,11 @@ INSERT INTO tbl_users (username, password_hash, full_name, is_admin)
 VALUES ('dev', crypt('dev', gen_salt('bf', 12)), 'Dev User', TRUE)
 ON CONFLICT (username) DO NOTHING;
 
+-- Give the dev login access to every project (tbl_user_projects is read at login).
+INSERT INTO tbl_user_projects (user_id, project_name)
+SELECT u.user_id, p.project_name FROM tbl_users u CROSS JOIN tbl_projects p WHERE u.username = 'dev'
+ON CONFLICT DO NOTHING;
+
 -- A small example traceability chain, so search, cards and the graph have something to show.
 INSERT INTO tbl_materials (material_id, chemistry, supplier, date_received, quantity_kg, location, availability) VALUES
     ('CAT-NMC-001', 'NMC 811',  'Example supplier', '2026-09-01', 5.0, 'Dry room', 'Available'),
