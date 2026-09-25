@@ -1292,3 +1292,122 @@ def HAZbot_ask(request: Request, question: str = Form(...)):
     conn.close()
 
     return JSONResponse({"sql": sql_part, "insight": insight_part, "columns": columns, "results": results})
+
+@app.get("/api/chart/my-projects")
+def chart_my_projects(request: Request):
+    allowed = get_allowed_projects(request)
+    conn = get_connection()
+    cur = conn.cursor()
+
+    if allowed is None:
+        cur.execute("SELECT project_name FROM tbl_projects WHERE active = true")
+        allowed = [row[0] for row in cur.fetchall()]
+
+    results = []
+    for project in allowed:
+        cur.execute("SELECT COUNT(*) FROM tbl_coating WHERE project = %s", (project,))
+        coatings = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM tbl_slp WHERE project = %s", (project,))
+        slp = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM tbl_coincell WHERE project = %s", (project,))
+        coincell = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM tbl_mlp WHERE project = %s", (project,))
+        mlp = cur.fetchone()[0]
+        results.append({
+            "project": project,
+            "coatings": coatings,
+            "slp": slp,
+            "coincell": coincell,
+            "mlp": mlp,
+            "total": coatings + slp + coincell + mlp
+        })
+
+    cur.close()
+    conn.close()
+    return JSONResponse({"projects": results})
+
+import shutil
+from pathlib import Path
+
+@app.get("/cycling/upload", response_class=HTMLResponse)
+def cycling_upload_form(request: Request):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+    return templates.TemplateResponse("cycling_upload.html", {"request": request})
+
+
+@app.post("/cycling/upload", response_class=HTMLResponse)
+async def cycling_upload_submit(request: Request, record_id: str = Form(...), file: UploadFile = File(...)):
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+
+    record_id = record_id.strip().upper()
+    error = None
+    success = None
+
+    if not record_id:
+        error = "Record ID is required."
+    elif not file.filename.endswith(".mpr"):
+        error = "Only .mpr files are supported."
+    else:
+        upload_dir = Path("uploads/cycling_data")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        save_path = upload_dir / f"{record_id}_{file.filename}"
+
+        contents = await file.read()
+        with open(save_path, "wb") as f:
+            f.write(contents)
+
+        try:
+            from galvani import BioLogic
+            mpr = BioLogic.MPRfile(str(save_path))
+            num_points = len(mpr.data)
+            max_capacity = float(mpr.data["Q charge/discharge/mA.h"].max())
+            num_cycles = int(mpr.data["half cycle"].max()) + 1
+
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO tbl_cycling_data (record_id, filename, file_path, num_points, max_capacity_mah, num_cycles) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (record_id, file.filename, str(save_path), num_points, max_capacity, num_cycles)
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
+            success = f"Uploaded and parsed {num_points} data points for {record_id} ({num_cycles} half-cycles)."
+        except Exception as e:
+            error = f"Failed to parse file: {str(e)}"
+
+    return templates.TemplateResponse("cycling_upload.html", {"request": request, "error": error, "success": success})
+
+@app.get("/api/cycling/{record_id}")
+def cycling_data(record_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT file_path FROM tbl_cycling_data WHERE record_id = %s ORDER BY uploaded_at DESC LIMIT 1",
+        (record_id,)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not row:
+        return JSONResponse({"error": "No cycling data found for this record"}, status_code=404)
+
+    from galvani import BioLogic
+    mpr = BioLogic.MPRfile(row[0])
+    data = mpr.data
+
+    # Downsample for the browser — 52,000 points is too many to chart smoothly
+    step = max(1, len(data) // 1000)
+    sampled = data[::step]
+
+    return JSONResponse({
+        "capacity_mah": [float(x) for x in sampled["Q charge/discharge/mA.h"]],
+        "voltage_v": [float(x) for x in sampled["Ewe/V"]],
+        "half_cycle": [int(x) for x in sampled["half cycle"]]
+    })
