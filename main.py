@@ -16,8 +16,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from core.config import SESSION_SECRET
-from routers import (api_keys, auth, bulk_upload, cards, charts, cycling, graph, hazbot, home, inventory, lineage,
-                     projects, records, records_edit, two_factor, users)
+from routers import (api_keys, auth, bulk_upload, cards, charts, coa, cycling, graph, hazbot, home, inventory,
+                     lineage, projects, records, records_edit, two_factor, users)
 from routers.mcp_server import mcp_app, mcp_server, set_main_app
 
 
@@ -33,8 +33,8 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Add every router's pages to the app. The order does not matter: no two URLs overlap.
-for module in (api_keys, auth, bulk_upload, cards, charts, cycling, graph, hazbot, home, inventory, lineage,
-               projects, records, records_edit, two_factor, users):
+for module in (api_keys, auth, bulk_upload, cards, charts, coa, cycling, graph, hazbot, home, inventory,
+               lineage, projects, records, records_edit, two_factor, users):
     app.include_router(module.router)
 
 # The MCP interface (routers/mcp_server.py): its tools call back into this app

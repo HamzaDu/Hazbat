@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from core.auth import current_user, get_allowed_projects, require_login
 from core.db import get_connection
 from core.templates import templates
+from services.coa import remove_coa_folder
 from services.records import record_visible
 
 router = APIRouter()
@@ -98,6 +99,7 @@ def delete_material(request: Request, material_id: str):
 
     cur.close()
     conn.close()
+    remove_coa_folder(material_id)   # its COA rows went with it (ON DELETE CASCADE); now the files
     return RedirectResponse(url="/inventory/materials", status_code=303)
 # --- Coatings ----------------------------------------------------------------
 
