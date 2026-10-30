@@ -5,24 +5,52 @@
 # External database (START_LOCAL_DB not set):
 #   docker run -p 8000:8000 -v hazbat-config:/etc/hazbat hazbat
 #
+# Build arguments (the two versions default to latest):
+#   --build-arg PYTHON_VERSION=3.13   any version uv can install
+#   --build-arg POSTGRES_VERSION=17   16, 17, 18 or latest
+#   --build-arg NO_2FA=1              skip the second-factor step at login
+#
 # Settings are read from /etc/hazbat/hazbat.ini:
 #   [database]  host, port, name, admin_password, read_write_password, read_only_password
 #   [app]       session_secret, base_url, gemini_api_key (optional)
 
 FROM alpine:latest
 
-RUN apk add --no-cache \
+ARG PYTHON_VERSION=latest
+ARG POSTGRES_VERSION=latest
+
+RUN if [ "$POSTGRES_VERSION" = latest ]; then \
+        postgres_packages="postgresql postgresql-contrib"; \
+    else \
+        postgres_packages="postgresql${POSTGRES_VERSION} postgresql${POSTGRES_VERSION}-contrib"; \
+    fi \
+    && apk add --no-cache \
     bash git su-exec \
-    python3 python3-dev py3-pip \
     build-base gfortran openblas-dev libffi-dev jpeg-dev zlib-dev \
-    postgresql postgresql-contrib
+    $postgres_packages vim
+
+RUN apk add --no-cache ca-certificates curl bash \
+    && curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
+
+ENV UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_PYTHON_BIN_DIR=/usr/local/bin
+RUN if [ "$PYTHON_VERSION" = latest ]; then \
+        uv python install --default; \
+    else \
+        uv python install "$PYTHON_VERSION" --default; \
+    fi \
+    && chmod -R a+rX /opt/python
 
 ENV PGDATA=/var/lib/postgresql/data
 
 # Alpine's Python refuses system-wide pip installs (PEP 668); this is a single-purpose container, so override it.
 # Requirements first, so this slow layer is cached until requirements.txt changes.
 COPY requirements.txt .
-RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+RUN python3 -m venv /opt/venv
+RUN /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+
+ARG NO_2FA=
+ENV NO_2FA=$NO_2FA
 
 RUN adduser -D app
 WORKDIR /app

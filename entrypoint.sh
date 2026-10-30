@@ -2,6 +2,8 @@
 
 trap 'kill -INT $(jobs -p); wait; exit 0' TERM INT
 
+source /opt/venv/bin/activate
+
 if [ -n "$START_LOCAL_DB" ]; then
     mkdir -p /run/postgresql
     chown postgres /run/postgresql

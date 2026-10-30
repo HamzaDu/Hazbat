@@ -192,3 +192,8 @@ def check_value(value):
     """Values must be on one line."""
     if "\r" in value or "\n" in value:
         raise ConfigError(f"A value must be on one line: {value!r}")
+
+
+def truthy(value):
+    """True for the text true or 1 (in any case). Anything else, including None, is false."""
+    return value is not None and value.strip().lower() in ("true", "1")

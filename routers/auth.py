@@ -12,7 +12,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from core.auth import complete_login, current_user, device_trusted, require_login, require_session
-from core.config import MAX_2FA_INTERVAL_HOURS
+from core.config import DISABLE_2FA, MAX_2FA_INTERVAL_HOURS
 from core.db import get_admin_connection, get_connection
 from core.templates import templates
 from services.account import (check_password, get_user_info, has_users, hash_password, set_user_full_name,
@@ -49,6 +49,9 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
         return templates.TemplateResponse(request, "login.html", {"error": "This account is locked. Contact an administrator."})
 
     user_id = user[0]
+    if DISABLE_2FA:
+        complete_login(request, user_id)
+        return RedirectResponse(url="/", status_code=303)
     request.session["pending_user_id"] = user_id
     request.session["pending_username"] = username
 

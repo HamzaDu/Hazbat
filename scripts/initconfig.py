@@ -10,7 +10,7 @@ import string
 import psycopg2
 from psycopg2 import sql
 
-from utils.config import ConfigFile
+from utils.config import ConfigFile, truthy
 
 
 def config_path():
@@ -54,6 +54,8 @@ def add_missing_app(config):
                         ("session_secret", generate_password()), ("two_factor_key", generate_password())):
         if add_if_missing(config, "app", name, value):
             added = True
+    if truthy(os.getenv("NO_2FA")) and add_if_missing(config, "app", "disable_2fa", "true"):
+        added = True
     return added
 
 
