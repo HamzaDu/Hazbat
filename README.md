@@ -143,6 +143,7 @@ read_only_password = read-only-password
 | `[app]` | `session_secret` | Key used to sign session cookies. Generated if absent. |
 | `[app]` | `two_factor_key` | Key used to encrypt authenticator secrets. Generated if absent. |
 | `[app]` | `max_2fa_interval_hours` | Longest time a user may set between second-factor checks. Defaults to 48. |
+| `[app]` | `disable_2fa` | When `true` or `1`, login skips the second-factor step. Written only when the image was built with `NO_2FA`, and never overwritten. Optional. |
 | `[app]` | `gemini_api_key` | API key for HAZbot. Optional. |
 | `[app]` | `trusted_proxies` | Address of a reverse proxy whose forwarded headers are trusted. Optional. |
 
@@ -155,6 +156,44 @@ Missing `[app]` settings are added at start-up in every configuration. Existing 
 | `START_LOCAL_DB` | When set, the container runs its own PostgreSQL server. |
 | `RELOAD` | When set, the application server reloads on changes to the source files. |
 | `SEED_SQL` | Path of an SQL file executed against the local database after the schema is applied. |
+
+### Build arguments
+
+The following arguments are given to `docker build` with `--build-arg`.
+
+| Argument | Effect |
+|---|---|
+| `PYTHON_VERSION` | Version of Python installed with uv, for example `3.12`. Defaults to `latest`. |
+| `POSTGRES_VERSION` | Version of PostgreSQL installed: `16`, `17`, `18` or `latest`. Defaults to `latest`. Any other value is passed to `apk` as the package suffix. |
+| `NO_2FA` | When `true` or `1`, the container adds `disable_2fa = true` to the settings file at start-up, and login skips the second-factor step. Existing two-factor records are not changed. |
+
+For example:
+
+```
+docker build --build-arg PYTHON_VERSION=3.12 --build-arg POSTGRES_VERSION=16 --build-arg NO_2FA=1 -t hazbat .
+```
+
+An existing settings file is never overwritten. To turn the setting off again, set `disable_2fa` to `false` in the file.
+Removing the line is not enough while the image is still built with `NO_2FA`, because the line is added again at the next
+start.
+
+### Disabling two-factor authentication
+
+**Disabling two-factor authentication is very, very strongly discouraged for any deployment other than testing.** It is
+provided only for development and automated testing, where a second factor is an obstacle and the data is not real.
+
+While `disable_2fa` is `true` or `1`:
+
+- Every user, including every administrator, is logged in by a user name and password alone. A stolen, guessed or reused
+  password gives full access to the account.
+- The setting applies to all users at once. It cannot be set for one user.
+- Users are not asked to enrol an authenticator, and the two-factor checks and trusted browsers are not used.
+
+The setting does not delete anything. Existing authenticators and recovery codes are kept, and apply again when the
+setting is turned off.
+
+An image built with `NO_2FA` must not be used for a deployment that holds real data or that can be reached from an
+untrusted network.
 
 ---
 
