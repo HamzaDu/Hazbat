@@ -9,28 +9,47 @@
 #   --build-arg PYTHON_VERSION=3.13   any version uv can install
 #   --build-arg POSTGRES_VERSION=17   16, 17, 18 or latest
 #   --build-arg NO_2FA=1              skip the second-factor step at login
+#   --build-arg TZ=Europe/London      timezone of the image (default UTC); to use the build machine's:
+#                                     --build-arg TZ=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
 #
 # Settings are read from /etc/hazbat/hazbat.ini:
 #   [database]  host, port, name, admin_password, read_write_password, read_only_password
 #   [app]       session_secret, base_url, gemini_api_key (optional)
 
-FROM alpine:latest
+FROM ubuntu:latest
 
 ARG PYTHON_VERSION=latest
 ARG POSTGRES_VERSION=latest
+ARG TZ=
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN if [ "$POSTGRES_VERSION" = latest ]; then \
-        postgres_packages="postgresql postgresql-contrib"; \
+# PostgreSQL comes from the PGDG repository, which carries every supported major version.
+# No default cluster is created: the entrypoint sets up its own in PGDATA.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl postgresql-common \
+    && sed -i "s/^#create_main_cluster.*/create_main_cluster = false/" /etc/postgresql-common/createcluster.conf \
+    && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y \
+    && if [ "$POSTGRES_VERSION" = latest ]; then \
+        postgres_packages="postgresql"; \
     else \
-        postgres_packages="postgresql${POSTGRES_VERSION} postgresql${POSTGRES_VERSION}-contrib"; \
+        postgres_packages="postgresql-${POSTGRES_VERSION}"; \
     fi \
-    && apk add --no-cache \
-    bash git su-exec \
-    build-base gfortran openblas-dev libffi-dev jpeg-dev zlib-dev \
-    $postgres_packages vim
+    && apt-get install -y --no-install-recommends \
+    bash git gosu clang cron tzdata \
+    build-essential gfortran libopenblas-dev libffi-dev libjpeg-dev zlib1g-dev \
+    $postgres_packages vim \
+    && ln -s /usr/lib/postgresql/*/bin/* /usr/local/bin/ \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN apk add --no-cache ca-certificates curl bash \
-    && curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
+RUN if [ -n "$TZ" ]; then \
+        ln -sf "/usr/share/zoneinfo/$TZ" /etc/localtime \
+        && echo "$TZ" > /etc/timezone; \
+    fi
+
+ENV CC=clang
+ENV CXX=clang++
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 
 ENV UV_PYTHON_INSTALL_DIR=/opt/python \
     UV_PYTHON_BIN_DIR=/usr/local/bin
@@ -49,10 +68,13 @@ COPY requirements.txt .
 RUN python3 -m venv /opt/venv
 RUN /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
+# Daily update, run by cron's cron.daily (06:25 by default).
+COPY --chmod=755 scripts/hazbat-update /etc/cron.daily/hazbat-update
+
 ARG NO_2FA=
 ENV NO_2FA=$NO_2FA
 
-RUN adduser -D app
+RUN useradd --create-home app
 WORKDIR /app
 ENV PATH="$PATH:/app/scripts"
 COPY main.py HAZbot.py ./
