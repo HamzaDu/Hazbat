@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 import io
 
 import pandas as pd
+from copy import copy
 
 from core.auth import get_allowed_projects, require_login
 from core.db import get_connection
@@ -326,7 +327,9 @@ def export_inventory(request: Request, table_key: str, format: str = "csv"):
         sheet = writer.sheets[name]
         sheet.freeze_panes = "A2"  # keep the header row visible when scrolling
         for cell in sheet[1]:
-            cell.font = cell.font.copy(bold=True)
+            font = copy(cell.font)
+            font.bold = True
+            cell.font = font
         for row in sheet.iter_rows(min_row=2):
             for cell in row:
                 if cell.is_date:

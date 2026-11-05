@@ -3,4 +3,4 @@
 #   createsuperuser [username]
 
 cd /app || exit 1
-exec python3 -m scripts.createsuperuser "$@"
+exec /opt/venv/bin/python3 -m scripts.createsuperuser "$@"

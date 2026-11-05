@@ -6,7 +6,12 @@
   "name": "Hazbat",
   "build": {
     "dockerfile": "../Dockerfile",
-    "context": ".."
+    "context": "..",
+    "args": {
+      "PYTHON_VERSION": "3.12",
+      "POSTGRES_VERSION": "16",
+      "NO_2FA": "1"
+    }
   },
   "overrideCommand": false,
   "containerEnv": {
@@ -17,7 +22,7 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/app,type=bind",
   "workspaceFolder": "/app",
   "mounts": [
-    "source=${localWorkspaceFolder}/.devcontainer/hazbat.ini,target=/etc/hazbat/hazbat.ini,type=bind"
+    "source=${localWorkspaceFolder}/.devcontainer/config,target=/etc/hazbat,type=bind"
   ],
 
   "forwardPorts": [8000, 5432],
