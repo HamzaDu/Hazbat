@@ -45,7 +45,7 @@
     .nav-dropdown-menu {
         display: none;
         position: absolute;
-        top: 28px;
+        top: 100%;
         left: 0;
         background: white;
         border-radius: 10px;
@@ -126,9 +126,31 @@
 
         <a href="/chart" class="{{ 'active' if request.url.path == '/chart' else '' }}">Chart</a>
         <a href="/graph" class="{{ 'active' if request.url.path == '/graph' else '' }}">Graph</a>
+        {% if request.session.get('is_admin') %}
+        <div style="position: relative;" class="nav-dropdown">
+            <span style="cursor: pointer; color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 500;">Users ▾</span>
+            <div class="nav-dropdown-menu">
+                <a href="/admin/users" class="{{ 'active' if request.url.path == '/admin/users' else '' }}">All users</a>
+                <a href="/admin/users/new" class="{{ 'active' if request.url.path == '/admin/users/new' else '' }}">Create a new user</a>
+            </div>
+        </div>
+        <div style="position: relative;" class="nav-dropdown">
+            <span style="cursor: pointer; color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 500;">Projects ▾</span>
+            <div class="nav-dropdown-menu">
+                <a href="/admin/projects" class="{{ 'active' if request.url.path == '/admin/projects' else '' }}">All projects</a>
+                <a href="/admin/projects/new" class="{{ 'active' if request.url.path == '/admin/projects/new' else '' }}">Create a project</a>
+            </div>
+        </div>
+        {% endif %}
         <span style="margin-left: auto;"></span>
         {% if request.session.get('user_id') %}
-        <span style="color: rgba(255,255,255,0.7); font-size: 13px;">{{ request.session.get('full_name') }}</span>
+        <div style="position: relative;" class="nav-dropdown">
+            <span style="cursor: pointer; color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 500;">{{ request.session.get('full_name') }} ▾</span>
+            <div class="nav-dropdown-menu" style="left: auto; right: 0;">
+                <a href="/user-info" class="{{ 'active' if request.url.path == '/user-info' else '' }}">My Account</a>
+                <a href="/api-keys" class="{{ 'active' if request.url.path == '/api-keys' else '' }}">API Keys</a>
+            </div>
+        </div>
         <a href="/logout">Logout</a>
         {% else %}
         <a href="/login">Login</a>

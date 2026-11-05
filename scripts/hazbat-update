@@ -1,0 +1,12 @@
+#!/bin/bash
+# Updates the OS packages and the Python packages (within the limits in requirements.txt).
+# Run daily by cron (copied to /etc/cron.daily). Running processes are not restarted.
+
+# The output goes to the container log.
+exec > /proc/1/fd/1 2>&1
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update || exit 1
+apt-get upgrade -y || exit 1
+/opt/venv/bin/pip install --no-cache-dir -U -r /requirements.txt

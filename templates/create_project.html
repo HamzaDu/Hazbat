@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Create Project — BMAC{% endblock %}
+{% block content %}
+<h1>Create Project</h1>
+<p class="page-note"><a href="/admin/projects">&larr; All projects</a></p>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<form method="post" action="/admin/projects/new" class="form-narrow">
+    <label>Project name</label>
+    <input type="text" name="name" value="{{ name }}" maxlength="60" required>
+    <p class="hint">Letters, digits, spaces, dots, hyphens and underscores, starting with a letter or a digit. A new project is active.</p>
+
+    <button type="submit">Create Project</button>
+</form>
+{% endblock %}

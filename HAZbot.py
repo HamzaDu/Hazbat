@@ -1,11 +1,9 @@
-import os
 import requests
 from typing import Optional
-from dotenv import load_dotenv
 
-load_dotenv()
+from core.varreg import settings
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = settings.get("app", "gemini_api_key")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
 SCHEMA_DESCRIPTION = """

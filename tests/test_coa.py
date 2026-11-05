@@ -29,8 +29,18 @@ def make_docx(with_body=True) -> bytes:
 @pytest.mark.parametrize("name, data, kind", [
     ("coa.pdf", b"%PDF-1.7\n...", "pdf"),
     ("COA.PDF", b"\n %PDF-1.4", "pdf"),
-    ("coa.docx", make_docx(), "docx"),
-    ("coa.doc", OLE_MAGIC + b"\x00" * 64, "doc"),
+    pytest.param(
+        "coa.docx",
+        make_docx(),
+        "docx",
+        id="word-docx",
+    ),
+    pytest.param(
+        "coa.doc",
+        OLE_MAGIC + b"\x00" * 64,
+        "doc",
+        id="legacy-word-doc",
+    ),
 ])
 def test_accepts_real_files(name, data, kind):
     assert detect_kind(name, data) == kind
@@ -38,12 +48,20 @@ def test_accepts_real_files(name, data, kind):
 
 @pytest.mark.parametrize("name, data", [
     ("coa.txt", b"hello"),                      # wrong extension
-    ("coa.pdf", b"MZ\x90\x00"),                  # renamed .exe
+    pytest.param(
+        "coa.pdf",
+        b"MZ\x90\x00",
+        id="renamed-exe",
+    ),
     ("coa.pdf", b""),                            # empty
     ("coa.docx", b"%PDF-1.7"),                   # not a zip
-    ("coa.docx", make_docx(with_body=False)),    # zip but not Word
+    pytest.param(
+        "coa.docx",
+        make_docx(with_body=False),
+        id="zip-but-not-word",
+    ),
     ("coa.doc", b"%PDF-1.7"),                    # not an OLE file
-    ("coa.pdf", b"%PDF-" + b"0" * MAX_COA_BYTES),  # too big
+    pytest.param("coa.pdf", b"%PDF-" + b"0" * MAX_COA_BYTES, id="too-big"),  # too big
 ])
 def test_rejects_bad_files(name, data):
     with pytest.raises(CoaError):

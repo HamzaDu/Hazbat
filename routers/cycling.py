@@ -5,12 +5,12 @@ File reading lives in services/cycling.py. Template: cycling_upload.html.
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
-from pathlib import Path
 
-from core.auth import require_login
+from core.auth import get_allowed_projects, require_login
 from core.db import get_connection
 from core.templates import templates
-from services.cycling import group_full_cycles, latest_cycling_file, read_half_cycles
+from services.cycling import group_full_cycles, latest_cycling_file, read_half_cycles, upload_path, valid_record_id
+from services.records import record_visible
 
 router = APIRouter()
 
@@ -23,7 +23,7 @@ def cycling_upload_form(request: Request):
     redirect = require_login(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse("cycling_upload.html", {"request": request})
+    return templates.TemplateResponse(request, "cycling_upload.html")
 
 
 @router.post("/cycling/upload", response_class=HTMLResponse)
@@ -41,10 +41,12 @@ async def cycling_upload_submit(request: Request, record_id: str = Form(...), fi
         error = "Record ID is required."
     elif not file.filename.endswith(".mpr"):
         error = "Only .mpr files are supported."
+    elif not valid_record_id(record_id):
+        error = "Record ID may only contain letters, numbers and hyphens."
+    elif not record_visible(record_id, get_allowed_projects(request)):
+        error = "Record not found."
     else:
-        upload_dir = Path("uploads/cycling_data")
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        save_path = upload_dir / f"{record_id}_{file.filename}"
+        save_path = upload_path(record_id, file.filename)
 
         contents = await file.read()
         with open(save_path, "wb") as f:
@@ -71,29 +73,26 @@ async def cycling_upload_submit(request: Request, record_id: str = Form(...), fi
         except Exception as e:
             error = f"Failed to parse file: {str(e)}"
 
-    return templates.TemplateResponse("cycling_upload.html", {"request": request, "error": error, "success": success})
+    return templates.TemplateResponse(request, "cycling_upload.html", {"error": error, "success": success})
 
 
 # --- Summary and voltage curves ----------------------------------------------
 
 @router.get("/api/cycling/{record_id}/summary")
-def cycling_summary(record_id: str):
+def cycling_summary(request: Request, record_id: str):
     """Capacity per half-cycle, coulombic efficiency and state of health from the latest file."""
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT file_path FROM tbl_cycling_data WHERE record_id = %s ORDER BY uploaded_at DESC LIMIT 1",
-        (record_id,)
-    )
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+    if not record_visible(record_id, get_allowed_projects(request)):
+        return JSONResponse({"error": "No cycling data found for this record"}, status_code=404)
+    file_path = latest_cycling_file(record_id)
 
-    if not row:
+    if not file_path:
         return JSONResponse({"error": "No cycling data found for this record"}, status_code=404)
 
     from galvani import BioLogic
-    mpr = BioLogic.MPRfile(row[0])
+    mpr = BioLogic.MPRfile(file_path)
     data = mpr.data
 
     cycles = sorted(set(int(x) for x in data["half cycle"]))
@@ -139,8 +138,13 @@ def cycling_summary(record_id: str):
 
 
 @router.get("/api/cycling/{record_id}/curves")
-def cycling_curves(record_id: str, cycles: str = "1,2"):
+def cycling_curves(request: Request, record_id: str, cycles: str = "1,2"):
     """Voltage vs capacity for chosen full cycles, e.g. ?cycles=1,2,last or ?cycles=all (max 20)."""
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+    if not record_visible(record_id, get_allowed_projects(request)):
+        return JSONResponse({"error": "No cycling data found for this record"}, status_code=404)
     file_path = latest_cycling_file(record_id)
     if not file_path:
         return JSONResponse({"error": "No cycling data found for this record"}, status_code=404)
@@ -165,8 +169,13 @@ def cycling_curves(record_id: str, cycles: str = "1,2"):
 
 
 @router.get("/api/cycling/{record_id}/cycle/{half_cycle}")
-def cycling_half_cycle(record_id: str, half_cycle: str):
+def cycling_half_cycle(request: Request, record_id: str, half_cycle: str):
     """One half-cycle's voltage curve (used by the graph page's voltage-capacity view)."""
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+    if not record_visible(record_id, get_allowed_projects(request)):
+        return JSONResponse({"error": "No cycling data found for this record"}, status_code=404)
     file_path = latest_cycling_file(record_id)
     if not file_path:
         return JSONResponse({"error": "No cycling data found for this record"}, status_code=404)

@@ -8,10 +8,11 @@ Templates: edit_material.html, edit_coating.html, edit_slp.html.
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from core.auth import require_login
+from core.auth import current_user, get_allowed_projects, require_login
 from core.db import get_connection
 from core.templates import templates
 from services.coa import remove_coa_folder
+from services.records import record_visible
 
 router = APIRouter()
 
@@ -25,7 +26,7 @@ def edit_material_form(request: Request, material_id: str):
     if redirect:
         return redirect
 
-    conn = get_connection()
+    conn = get_connection(read_only=True)
     cur = conn.cursor()
     cur.execute(
         "SELECT material_id, chemistry, supplier, date_received, quantity_kg, location, availability "
@@ -40,7 +41,7 @@ def edit_material_form(request: Request, material_id: str):
 
     columns = ["material_id", "chemistry", "supplier", "date_received", "quantity_kg", "location", "availability"]
     material = dict(zip(columns, row))
-    return templates.TemplateResponse("edit_material.html", {"request": request, "material": material})
+    return templates.TemplateResponse(request, "edit_material.html", {"material": material})
 
 
 @router.post("/materials/{material_id}/edit", response_class=HTMLResponse)
@@ -74,7 +75,7 @@ def submit_edit_material(request: Request, material_id: str, chemistry: str = Fo
         conn.close()
 
     material = {"material_id": material_id, "chemistry": chemistry, "supplier": supplier}
-    return templates.TemplateResponse("edit_material.html", {"request": request, "material": material, "error": error, "success": success})
+    return templates.TemplateResponse(request, "edit_material.html", {"material": material, "error": error, "success": success})
 
 @router.post("/materials/{material_id}/delete")
 def delete_material(request: Request, material_id: str):
@@ -82,7 +83,7 @@ def delete_material(request: Request, material_id: str):
     redirect = require_login(request)
     if redirect:
         return redirect
-    if not request.session.get("is_admin"):
+    if not current_user(request).get("is_admin"):
         return HTMLResponse("Admins only.", status_code=403)
 
     conn = get_connection()
@@ -108,8 +109,10 @@ def edit_coating_form(request: Request, coating_id: str):
     redirect = require_login(request)
     if redirect:
         return redirect
+    if not record_visible(coating_id, get_allowed_projects(request)):
+        return HTMLResponse("Coating not found.", status_code=404)
 
-    conn = get_connection()
+    conn = get_connection(read_only=True)
     cur = conn.cursor()
     cur.execute(
         "SELECT coating_id, material_id, project, coating_date, made_by, coat_weight_gsm, porosity "
@@ -124,7 +127,7 @@ def edit_coating_form(request: Request, coating_id: str):
 
     columns = ["coating_id", "material_id", "project", "coating_date", "made_by", "coat_weight_gsm", "porosity"]
     coating = dict(zip(columns, row))
-    return templates.TemplateResponse("edit_coating.html", {"request": request, "coating": coating})
+    return templates.TemplateResponse(request, "edit_coating.html", {"coating": coating})
 
 
 @router.post("/coatings/{coating_id}/edit", response_class=HTMLResponse)
@@ -133,6 +136,8 @@ def submit_edit_coating(request: Request, coating_id: str, made_by: str = Form(.
     redirect = require_login(request)
     if redirect:
         return redirect
+    if not record_visible(coating_id, get_allowed_projects(request)):
+        return HTMLResponse("Coating not found.", status_code=404)
 
     made_by = made_by.strip()
     error = None
@@ -157,7 +162,7 @@ def submit_edit_coating(request: Request, coating_id: str, made_by: str = Form(.
         conn.close()
 
     coating = {"coating_id": coating_id, "made_by": made_by, "coat_weight_gsm": coat_weight_gsm, "porosity": porosity}
-    return templates.TemplateResponse("edit_coating.html", {"request": request, "coating": coating, "error": error, "success": success})
+    return templates.TemplateResponse(request, "edit_coating.html", {"coating": coating, "error": error, "success": success})
 
 
 @router.post("/coatings/{coating_id}/delete")
@@ -166,7 +171,7 @@ def delete_coating(request: Request, coating_id: str):
     redirect = require_login(request)
     if redirect:
         return redirect
-    if not request.session.get("is_admin"):
+    if not current_user(request).get("is_admin"):
         return HTMLResponse("Admins only.", status_code=403)
 
     conn = get_connection()
@@ -192,8 +197,10 @@ def edit_slp_form(request: Request, slp_id: str):
     redirect = require_login(request)
     if redirect:
         return redirect
+    if not record_visible(slp_id, get_allowed_projects(request)):
+        return HTMLResponse("SLP cell not found.", status_code=404)
 
-    conn = get_connection()
+    conn = get_connection(read_only=True)
     cur = conn.cursor()
     cur.execute(
         "SELECT slp_id, coating_id, project, date_made, made_by, electrolyte, formation_capacity "
@@ -208,7 +215,7 @@ def edit_slp_form(request: Request, slp_id: str):
 
     columns = ["slp_id", "coating_id", "project", "date_made", "made_by", "electrolyte", "formation_capacity"]
     slp = dict(zip(columns, row))
-    return templates.TemplateResponse("edit_slp.html", {"request": request, "slp": slp})
+    return templates.TemplateResponse(request, "edit_slp.html", {"slp": slp})
 
 
 @router.post("/slp/{slp_id}/edit", response_class=HTMLResponse)
@@ -217,6 +224,8 @@ def submit_edit_slp(request: Request, slp_id: str, made_by: str = Form(...), ele
     redirect = require_login(request)
     if redirect:
         return redirect
+    if not record_visible(slp_id, get_allowed_projects(request)):
+        return HTMLResponse("SLP cell not found.", status_code=404)
 
     made_by = made_by.strip()
     error = None
@@ -241,7 +250,7 @@ def submit_edit_slp(request: Request, slp_id: str, made_by: str = Form(...), ele
         conn.close()
 
     slp = {"slp_id": slp_id, "made_by": made_by, "electrolyte": electrolyte, "formation_capacity": formation_capacity}
-    return templates.TemplateResponse("edit_slp.html", {"request": request, "slp": slp, "error": error, "success": success})
+    return templates.TemplateResponse(request, "edit_slp.html", {"slp": slp, "error": error, "success": success})
 
 
 @router.post("/slp/{slp_id}/delete")
@@ -250,7 +259,7 @@ def delete_slp(request: Request, slp_id: str):
     redirect = require_login(request)
     if redirect:
         return redirect
-    if not request.session.get("is_admin"):
+    if not current_user(request).get("is_admin"):
         return HTMLResponse("Admins only.", status_code=403)
 
     conn = get_connection()

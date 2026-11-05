@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Setup required — BMAC{% endblock %}
+{% block content %}
+<h1>This server has not yet been configured</h1>
+
+<div class="result">
+    <p class="flush-top">To complete setup, create an administrator account by running the following command on the server:</p>
+    <code class="code-box">createsuperuser {username}</code>
+</div>
+{% endblock %}

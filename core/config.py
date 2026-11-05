@@ -1,15 +1,21 @@
-"""Settings read from environment variables (or a .env file in the repo folder).
+"""Settings read from the config file (core/varreg.py).
 
-BASE_URL        address the QR codes point to, e.g. http://hazbat.wmg.local:8000
-SESSION_SECRET  key used to sign the login cookie
-DATABASE_URL    read in core/db.py
+[app] base_url        address the QR codes point to, e.g. http://hazbat.wmg.local:8000
+[app] session_secret  key used to sign the login cookie
+[app] max_2fa_interval_hours  longest time, in whole hours, a user may set between second-factor checks
+[app] disable_2fa     true or 1 skips the second-factor step at login (written when the NO_2FA build argument is set)
+The database settings are read in core/db.py.
 """
 
-import os
+from core.varreg import settings
+from utils.config import truthy
 
-from dotenv import load_dotenv
+settings.require("app", "base_url", "session_secret", "max_2fa_interval_hours")
 
-load_dotenv()
-
-BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:8000")
-SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-secret-change-this-later")
+BASE_URL = settings.get("app", "base_url")
+SESSION_SECRET = settings.get("app", "session_secret")
+try:
+    MAX_2FA_INTERVAL_HOURS = int(settings.get("app", "max_2fa_interval_hours"))
+except ValueError:
+    raise RuntimeError("[app] max_2fa_interval_hours must be a whole number of hours")
+DISABLE_2FA = truthy(settings.get("app", "disable_2fa"))

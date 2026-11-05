@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Projects — BMAC{% endblock %}
+{% block content %}
+<h1>Projects</h1>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if success %}<p class="success">{{ success }}</p>{% endif %}
+
+<p><a href="/admin/projects/new">Create a project</a></p>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Project</th>
+            <th>Status</th>
+            <th>Records</th>
+            <th>Users</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for project in projects %}
+        <tr>
+            <td class="name"><a href="/admin/projects/{{ project.name | urlencode }}">{{ project.name }}</a></td>
+            <td>{{ 'Active' if project.active else 'Inactive' }}</td>
+            <td>{{ project.records }}</td>
+            <td>{{ project.users }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

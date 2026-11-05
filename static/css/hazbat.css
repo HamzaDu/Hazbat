@@ -286,6 +286,30 @@ button.btn-outline { margin: 0; font-family: inherit; cursor: pointer; }
     .nav-divider, .nav-logo { display: none; }
 }
 
+/* --- Account pages: API keys, two-factor setup, first-run setup --- */
+.page-note { color: #999; font-size: 14px; }
+.form-narrow { max-width: 420px; }
+.flush-top { margin-top: 0; }
+.label-gap { margin-top: 15px; }
+.section-gap { margin-top: 40px; }
+.code-box { display: block; padding: 10px; background: var(--hz-bg); border-radius: 8px; word-break: break-all; }
+.code-box.list-item { padding: 6px 10px; margin-top: 6px; }
+.qr-image { width: 220px; height: 220px; }
+.data-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+.data-table th { padding: 8px; text-align: left; background: #f5f8fc; border-bottom: 2px solid #ccc; }
+.data-table td { padding: 8px; border-bottom: 1px solid #eee; }
+.data-table td.name { font-weight: 600; }
+.data-table td.actions { text-align: right; }
+.inline-form { margin: 0; }
+button.danger { margin-top: 0; padding: 6px 14px; background: #c62828; }
+.drawer { margin-top: 20px; background: #fff; border: 1px solid var(--hz-border); border-radius: 8px; }
+.drawer summary { padding: 12px 16px; font-weight: 700; color: var(--hz-navy); cursor: pointer; }
+.drawer[open] summary { border-bottom: 1px solid var(--hz-line); }
+.drawer-body { padding: 0 16px 16px; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; }
+.row-actions button { margin-top: 0; padding: 6px 12px; }
+.locked-row td { color: var(--hz-muted); }
+
 /* --- Certificate of Analysis (templates/_coa.html, static/js/coa.js) --- */
 .coa-section-title { margin: 32px 0 0; font-size: 18px; color: var(--hz-navy); }
 .mat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 14px; }

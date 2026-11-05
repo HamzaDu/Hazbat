@@ -1,0 +1,6 @@
+#!/bin/bash
+# Create an admin user in tbl_users, prompting for the password.
+#   createsuperuser [username]
+
+cd /app || exit 1
+exec /opt/venv/bin/python3 -m scripts.createsuperuser "$@"

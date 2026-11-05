@@ -12,11 +12,6 @@
         every relationship enforced at the database level.
     </p>
 </div>
-{% if request.session.get('is_admin') %}
-<div style="text-align: center; margin-bottom: 20px;">
-    <a href="/admin/users/new" style="font-size: 13px; color: #2e5fa3;">+ Create a new user</a>
-</div>
-{% endif %}
 
 <div style="display: flex; gap: 24px; margin-top: 32px;">
 
@@ -122,7 +117,7 @@
     function showPanel(target) {
         document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
         document.querySelectorAll('.home-panel, .project-panel').forEach(p => p.style.display = 'none');
-        const link = document.querySelector(`.sidebar-link[data-target="${target}"]`);
+        const link = document.querySelector(`.sidebar-link[data-target="${CSS.escape(target)}"]`);
         if (link) link.classList.add('active');
         const panel = document.getElementById('panel-' + target);
         if (panel) panel.style.display = 'block';
@@ -199,14 +194,30 @@
                             </div>
                         </div>`).join('')}
                 </div>
-                <div class="result" style="margin-top: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <h4 style="margin: 0;">${p.project} — Record Breakdown</h4>
-                        <span class="chip">${p.total} total</span>
-                    </div>
-                    <canvas id="chartProject-${slug}"></canvas>
-                </div>
             `;
+
+            // The project name is data, so it goes in as text and never as HTML
+            const result = document.createElement('div');
+            result.className = 'result';
+            result.style.marginTop = '16px';
+
+            const head = document.createElement('div');
+            head.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;';
+            const title = document.createElement('h4');
+            title.style.margin = '0';
+            title.textContent = p.project + ' — Record Breakdown';
+            const total = document.createElement('span');
+            total.className = 'chip';
+            total.textContent = p.total + ' total';
+            head.appendChild(title);
+            head.appendChild(total);
+
+            const canvas = document.createElement('canvas');
+            canvas.id = 'chartProject-' + slug;
+
+            result.appendChild(head);
+            result.appendChild(canvas);
+            panel.appendChild(result);
             panels.appendChild(panel);
             makeChart('chartProject-' + slug, 'doughnut', labels, values, p.project);
         });
