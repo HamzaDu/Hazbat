@@ -23,11 +23,12 @@ three configurations.
 All settings are held in a single file, `/etc/hazbat/hazbat.ini`. The settings are listed in the reference at the end of
 this section.
 
-### Development container (Visual Studio Code)
+### Development container (Visual Studio Code / GitHub Codespaces)
 
-**Prerequisites:** Docker, and Visual Studio Code with the Dev Containers extension.
+**Prerequisites:** Docker, and Visual Studio Code with the Dev Containers extension OR GitHub Codespaces.
 
-**Procedure**
+
+**Procedure (Visual Studio Code)**
 
 1. Open the repository in Visual Studio Code.
 2. Run the command *Dev Containers: Reopen in Container*. The initial build may take several minutes.
@@ -45,6 +46,11 @@ this section.
   required after a change to the schema, the `Dockerfile`, `requirements.txt` or `entrypoint.sh`.
 - A connection named "Hazbat dev DB" is configured for the SQLTools extension, using the user `hazbat_admin`, the
   password `dev` and the forwarded port 5432.
+
+**Running Tests Inside the Dev Container**
+1. Activate virtual environment: `source /opt/venv/bin/activate`
+2. Install dev dependencies: `pip install -r requirements-dev.txt`
+3. Run tests: `pytest -v`
 
 ### Self-contained container
 
