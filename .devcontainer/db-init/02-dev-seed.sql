@@ -1,14 +1,5 @@
--- Dev-only setup, run once after schema.sql when the dev database is first created.
+-- Dev-only data, loaded by the entrypoint (SEED_SQL) after the schema has been applied.
 -- NOT for production.
-
--- tbl_users is not in schema.sql yet, so create it here if missing.
-CREATE TABLE IF NOT EXISTS tbl_users (
-    user_id        SERIAL PRIMARY KEY,
-    username       TEXT UNIQUE NOT NULL,
-    password_hash  TEXT NOT NULL,
-    full_name      TEXT,
-    is_admin       BOOLEAN NOT NULL DEFAULT FALSE
-);
 
 -- Dev login: username "dev", password "dev" (bcrypt hash made by pgcrypto).
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

@@ -9,10 +9,8 @@ Nothing to install on your own computer when using GitHub Codespaces.
 
 First start takes ~3–5 minutes (it installs requirements.txt).
 
-## Run the app
-```bash
-uvicorn main:app --reload --host 0.0.0.0
-```
+## Access the app
+The app is run automatically.
 Open the forwarded port 8000 and log in with **dev / dev**.
 
 ## What's set up

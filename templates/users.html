@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Users — BMAC{% endblock %}
+{% block content %}
+<h1>Users</h1>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if success %}<p class="success">{{ success }}</p>{% endif %}
+
+<input type="search" id="userSearch" class="form-narrow" placeholder="Search by username or name">
+
+<table class="data-table" id="usersTable">
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>Full name</th>
+            <th>Role</th>
+            <th>Projects</th>
+            <th>Two-factor</th>
+            <th>Status</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        <tr data-search="{{ (u.username ~ ' ' ~ (u.full_name or '')) | lower }}"{% if u.locked %} class="locked-row"{% endif %}>
+            <td class="name"><a href="/admin/users/{{ u.user_id }}/edit">{{ u.username }}</a></td>
+            <td>{{ u.full_name | dash }}</td>
+            <td>{{ 'Administrator' if u.is_admin else 'User' }}</td>
+            <td>{% if u.is_admin %}All (Admin){% elif u.projects %}{{ u.projects | join(', ') }}{% else %}None{% endif %}</td>
+            <td>{{ 'On' if u.twofa_enabled else 'Not set up' }}</td>
+            <td>{{ 'Locked' if u.locked else 'Active' }}</td>
+            <td class="actions">
+                <div class="row-actions">
+                    {% if u.user_id != own_id %}
+                    {% if u.locked %}
+                    <form method="post" action="/admin/users/{{ u.user_id }}/unlock" class="inline-form">
+                        <button type="submit">Unlock</button>
+                    </form>
+                    {% else %}
+                    <form method="post" action="/admin/users/{{ u.user_id }}/lock" class="inline-form"
+                          data-confirm="Lock {{ u.username }}? They will be signed out and unable to log in.">
+                        <button type="submit">Lock</button>
+                    </form>
+                    {% endif %}
+                    <form method="post" action="/admin/users/{{ u.user_id }}/delete" class="inline-form"
+                          data-confirm="Delete {{ u.username }}? This cannot be undone. Their API keys and two-factor settings are deleted too.">
+                        <button type="submit" class="danger">Delete</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<script>
+    // Filter the rows already on the page; nothing is sent to the server
+    const userRows = document.querySelectorAll('#usersTable tbody tr');
+    document.getElementById('userSearch').addEventListener('input', event => {
+        const query = event.target.value.trim().toLowerCase();
+        userRows.forEach(row => {
+            row.hidden = query !== '' && !row.dataset.search.includes(query);
+        });
+    });
+
+    // Ask before a form that has a data-confirm message is sent
+    document.addEventListener('submit', event => {
+        const message = event.target.dataset.confirm;
+        if (message && !confirm(message)) {
+            event.preventDefault();
+        }
+    });
+</script>
+{% endblock %}

@@ -4,16 +4,48 @@ Files are saved in uploads/cycling_data/ and listed in tbl_cycling_data.
 Each file is split into half-cycles (charge or discharge) for the voltage curves.
 """
 
+import os
+import re
+from pathlib import Path
+
 from core.db import get_connection
 
 
+UPLOAD_DIR = Path("uploads/cycling_data")
 VOLTAGE_COLUMNS = ("Ewe/V", "Ecell/V", "<Ewe>/V")   # BioLogic names, first one found is used
 MAX_POINTS_PER_CURVE = 400                          # keeps the JSON small for long files
 
 
+def valid_record_id(record_id: str) -> bool:
+    """True if the ID is only letters, digits and hyphens, so it is safe to use in a file name."""
+    return re.fullmatch(r"[A-Za-z0-9-]+", record_id) is not None
+
+
+def upload_path(record_id: str, filename: str):
+    """Where an uploaded file is saved: always directly inside UPLOAD_DIR, whatever the file is called.
+    Only the last part of the name is kept, and anything but letters, digits, '.', '-' and '_' becomes '_'.
+    record_id must already have passed valid_record_id()."""
+    last_part = os.path.basename(filename.replace("\\", "/"))
+    name = re.sub(r"[^A-Za-z0-9._-]", "_", last_part).lstrip(".")
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    path = UPLOAD_DIR / f"{record_id}_{name}"
+    if path.resolve().parent != UPLOAD_DIR.resolve():
+        raise ValueError("File name is not allowed.")
+    return path
+
+
+def stored_file(file_path: str):
+    """The stored path if it is directly inside UPLOAD_DIR, otherwise None.
+    The database is not trusted to hold a safe path."""
+    path = Path(file_path).resolve()
+    if path.parent != UPLOAD_DIR.resolve():
+        return None
+    return str(path)
+
+
 def latest_cycling_file(record_id: str):
     """Path of the most recently uploaded .mpr file for a record (None if there isn't one)."""
-    conn = get_connection()
+    conn = get_connection(read_only=True)
     cur = conn.cursor()
     cur.execute(
         "SELECT file_path FROM tbl_cycling_data WHERE record_id = %s ORDER BY uploaded_at DESC LIMIT 1",
@@ -22,7 +54,9 @@ def latest_cycling_file(record_id: str):
     row = cur.fetchone()
     cur.close()
     conn.close()
-    return row[0] if row else None
+    if not row:
+        return None
+    return stored_file(row[0])
 
 
 def read_half_cycles(file_path: str):

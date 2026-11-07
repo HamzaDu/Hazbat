@@ -8,9 +8,10 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from core.auth import get_allowed_projects, require_login
 from core.db import get_connection
 from core.templates import templates
-from services.records import detect_record_type
+from services.records import detect_record_type, record_visible
 
 router = APIRouter()
 
@@ -18,10 +19,16 @@ router = APIRouter()
 # --- Whole graph -------------------------------------------------------------
 
 @router.get("/api/graph")
-def traceability_graph():
+def traceability_graph(request: Request):
     """Every record as graph nodes, linked material -> coating -> cell, plus dashed links to projects."""
-    conn = get_connection()
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+    conn = get_connection(read_only=True)
     cur = conn.cursor()
+
+    allowed = get_allowed_projects(request)  # None = admin, sees everything
+    where, params = ("", ()) if allowed is None else (" WHERE project = ANY(%s)", (list(allowed),))
 
     nodes = []
     edges = []
@@ -37,7 +44,7 @@ def traceability_graph():
     for mat_id, chem in cur.fetchall():
         nodes.append({"id": mat_id, "label": mat_id, "group": "material", "title": chem or ""})
 
-    cur.execute("SELECT coating_id, material_id, project FROM tbl_coating")
+    cur.execute("SELECT coating_id, material_id, project FROM tbl_coating" + where, params)
     for coat_id, mat_id, project in cur.fetchall():
         nodes.append({"id": coat_id, "label": coat_id, "group": "coating"})
         edges.append({"from": mat_id, "to": coat_id})
@@ -45,7 +52,7 @@ def traceability_graph():
         if project:
             edges.append({"from": coat_id, "to": f"PROJECT-{project}", "dashes": True})
 
-    cur.execute("SELECT slp_id, coating_id, project FROM tbl_slp")
+    cur.execute("SELECT slp_id, coating_id, project FROM tbl_slp" + where, params)
     for slp_id, coat_id, project in cur.fetchall():
         nodes.append({"id": slp_id, "label": slp_id, "group": "slp"})
         edges.append({"from": coat_id, "to": slp_id})
@@ -53,7 +60,7 @@ def traceability_graph():
         if project:
             edges.append({"from": slp_id, "to": f"PROJECT-{project}", "dashes": True})
 
-    cur.execute("SELECT coincell_id, coating_id, project FROM tbl_coincell")
+    cur.execute("SELECT coincell_id, coating_id, project FROM tbl_coincell" + where, params)
     for cc_id, coat_id, project in cur.fetchall():
         nodes.append({"id": cc_id, "label": cc_id, "group": "coincell"})
         edges.append({"from": coat_id, "to": cc_id})
@@ -61,7 +68,7 @@ def traceability_graph():
         if project:
             edges.append({"from": cc_id, "to": f"PROJECT-{project}", "dashes": True})
 
-    cur.execute("SELECT mlp_id, cat_coating_id, an_coating_id, project FROM tbl_mlp")
+    cur.execute("SELECT mlp_id, cat_coating_id, an_coating_id, project FROM tbl_mlp" + where, params)
     for mlp_id, cat_id, an_id, project in cur.fetchall():
         nodes.append({"id": mlp_id, "label": mlp_id, "group": "mlp"})
         edges.append({"from": cat_id, "to": mlp_id})
@@ -72,32 +79,44 @@ def traceability_graph():
 
     cur.close()
     conn.close()
+    # A link to a record the user cannot see would point at a missing node
+    node_ids = {n["id"] for n in nodes}
+    edges = [e for e in edges if e["from"] in node_ids and e["to"] in node_ids]
     return JSONResponse({"nodes": nodes, "edges": edges})
 
 @router.get("/graph", response_class=HTMLResponse)
 def graph_page(request: Request):
     """Traceability graph page."""
-    return templates.TemplateResponse("graph.html", {"request": request})
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+    return templates.TemplateResponse(request, "graph.html")
 
 
 # --- One record and its neighbours -------------------------------------------
 
 @router.get("/api/graph/{record_id}")
-def record_graph(record_id: str):
+def record_graph(request: Request, record_id: str):
     """One record with the records directly above and below it in the chain."""
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     record_type = detect_record_type(record_id)
     if not record_type:
         return JSONResponse({"error": "Unrecognised ID format"}, status_code=404)
+    allowed = get_allowed_projects(request)  # None = admin, sees everything
+    if not record_visible(record_id, allowed):
+        return JSONResponse({"error": "Record not found"}, status_code=404)
 
-    conn = get_connection()
+    conn = get_connection(read_only=True)
     cur = conn.cursor()
     nodes = []
     edges = []
     seen = set()
 
     def add_node(node_id, group):
-        """Add a node unless it is already in the graph."""
-        if node_id not in seen:
+        """Add a node unless it is already in the graph or the user may not see it."""
+        if node_id not in seen and record_visible(node_id, allowed):
             nodes.append({"id": node_id, "label": node_id, "group": group})
             seen.add(node_id)
 
@@ -162,18 +181,23 @@ def record_graph(record_id: str):
 
     cur.close()
     conn.close()
+    node_ids = {n["id"] for n in nodes}
+    edges = [e for e in edges if e["from"] in node_ids and e["to"] in node_ids]
     return JSONResponse({"nodes": nodes, "edges": edges})
 
 
 # --- Filter options ----------------------------------------------------------
 
 @router.get("/api/filters")
-def graph_filters():
+def graph_filters(request: Request):
     """
     Filter options for the traceability graph. Shape matches buildFilterUI()
     in templates/graph.html: {material:{...}, coating:{...}, cell:{...}}.
     """
-    conn = get_connection()
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+    conn = get_connection(read_only=True)
     cur = conn.cursor()
 
     def distinct(sql):

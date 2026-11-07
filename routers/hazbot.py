@@ -21,12 +21,15 @@ def HAZbot_page(request: Request):
     redirect = require_login(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse("HAZbot.html", {"request": request})
+    return templates.TemplateResponse(request, "HAZbot.html")
 
 
 @router.post("/api/HAZbot/ask")
 def HAZbot_ask(request: Request, question: str = Form(...)):
     """Turn a question into SQL with the AI model, run it if it is a SELECT, and return the results."""
+    redirect = require_login(request)
+    if redirect:
+        return redirect
     raw = ask_ai_for_sql(question)
 
     if raw.startswith("ERROR"):
@@ -45,7 +48,7 @@ def HAZbot_ask(request: Request, question: str = Form(...)):
     if not sql_part.upper().startswith("SELECT"):
         return JSONResponse({"error": "Generated query was not a SELECT statement — blocked for safety."}, status_code=400)
 
-    conn = get_connection()
+    conn = get_connection(read_only=True)
     cur = conn.cursor()
     try:
         cur.execute(sql_part)

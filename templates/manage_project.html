@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} — BMAC{% endblock %}
+{% block content %}
+<h1>{{ project.name }}</h1>
+<p class="page-note"><a href="/admin/projects">&larr; All projects</a></p>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if success %}<p class="success">{{ success }}</p>{% endif %}
+
+<div class="result form-narrow">
+    <div class="row"><span class="label">Status</span><span class="value">{{ 'Active' if project.active else 'Inactive' }}</span></div>
+    <div class="row"><span class="label">Records</span><span class="value">{{ project.records }}</span></div>
+    <div class="row"><span class="label">Users</span><span class="value">{{ project.users }}</span></div>
+</div>
+
+<p class="page-note">An inactive project is left out of the lists offered when users and records are created. Existing records and users keep it.</p>
+
+<form method="post" action="/admin/projects/{{ project.name | urlencode }}/active" class="form-narrow"
+      {% if project.active %}data-confirm="Deactivate {{ project.name }}? It will no longer be offered when users and records are created."{% endif %}>
+    <input type="hidden" name="active" value="{{ 'false' if project.active else 'true' }}">
+    <button type="submit">{{ 'Deactivate' if project.active else 'Activate' }}</button>
+</form>
+
+<script>
+    // Ask before a form that has a data-confirm message is sent
+    document.addEventListener('submit', event => {
+        const message = event.target.dataset.confirm;
+        if (message && !confirm(message)) {
+            event.preventDefault();
+        }
+    });
+</script>
+{% endblock %}

@@ -1,19 +1,35 @@
-// Dev environment for Hazbat: Python 3.12 + a private PostgreSQL database.
-// Works in GitHub Codespaces (nothing to install) or locally with VS Code "Dev Containers" + Docker.
-// The database is created from schema.sql on first start, plus a dev login (dev / dev).
+// Dev environment for Hazbat: the project's own image, with its PostgreSQL inside it (START_LOCAL_DB).
+// The repository is mounted over /app and uvicorn reloads when files change (RELOAD).
+// The entrypoint builds the database from schemas/ and then loads the dev data in db-init/02-dev-seed.sql (SEED_SQL).
+// The config file is .devcontainer/hazbat.ini, with dev-only passwords. Nothing is kept when the container is rebuilt.
 {
-  "name": "Hazbat (Python 3.12 + PostgreSQL 16)",
-  "dockerComposeFile": "docker-compose.yml",
-  "service": "app",
-  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "name": "Hazbat",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": "..",
+    "args": {
+      "PYTHON_VERSION": "3.12",
+      "POSTGRES_VERSION": "16",
+      "NO_2FA": "1"
+    }
+  },
+  "overrideCommand": false,
+  "containerEnv": {
+    "START_LOCAL_DB": "1",
+    "RELOAD": "1",
+    "SEED_SQL": "/app/.devcontainer/db-init/02-dev-seed.sql"
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/app,type=bind",
+  "workspaceFolder": "/app",
+  "mounts": [
+    "source=${localWorkspaceFolder}/.devcontainer/config,target=/etc/hazbat,type=bind"
+  ],
 
   "forwardPorts": [8000, 5432],
   "portsAttributes": {
     "8000": { "label": "Hazbat app", "onAutoForward": "openBrowser" },
     "5432": { "label": "PostgreSQL", "onAutoForward": "silent" }
   },
-
-  "postCreateCommand": "pip install -r requirements.txt",
 
   "customizations": {
     "vscode": {
@@ -30,16 +46,11 @@
             "server": "localhost",
             "port": 5432,
             "database": "bmac",
-            "username": "postgres",
-            "password": "postgres"
+            "username": "hazbat_admin",
+            "password": "dev"
           }
         ]
       }
     }
-  },
-
-  // Optional: add GEMINI_API_KEY as a Codespaces secret (GitHub → Settings → Codespaces) for HAZbot
-  "secrets": {
-    "GEMINI_API_KEY": { "description": "Google Gemini API key used by HAZbot (optional)" }
   }
 }

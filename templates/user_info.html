@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}My Account — BMAC{% endblock %}
+{% block content %}
+<h1>My Account</h1>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if success %}<p class="success">{{ success }}</p>{% endif %}
+
+<div class="result form-narrow">
+    <div class="row"><span class="label">Username</span><span class="value">{{ info.username }}</span></div>
+    <div class="row"><span class="label">Full name</span><span class="value">{{ info.full_name }}</span></div>
+    <div class="row"><span class="label">Role</span><span class="value">{{ 'Administrator' if info.is_admin else 'User' }}</span></div>
+    <div class="row"><span class="label">Projects</span><span class="value">{% if info.is_admin %}All (Admin){% elif info.projects %}{{ info.projects | join(', ') }}{% else %}None{% endif %}</span></div>
+    <div class="row"><span class="label">Two-factor authentication</span><span class="value">{{ 'On' if info.twofa_enabled else 'Not set up' }}</span></div>
+    <div class="row"><span class="label">Last two-factor check</span><span class="value">{{ info.twofa_last_used.strftime('%Y-%m-%d %H:%M') if info.twofa_last_used else '—' }}</span></div>
+</div>
+
+<details class="drawer"{% if open_section == 'name' %} open{% endif %}>
+    <summary>Change full name</summary>
+    <div class="drawer-body">
+        <form method="post" action="/user-info/name" class="form-narrow">
+            <label>Full name</label>
+            <input type="text" name="full_name" value="{{ info.full_name or '' }}" required>
+
+            <button type="submit">Change Full Name</button>
+        </form>
+    </div>
+</details>
+
+<details class="drawer"{% if open_section == 'password' %} open{% endif %}>
+    <summary>Change password</summary>
+    <div class="drawer-body">
+        <form method="post" action="/user-info/password" class="form-narrow">
+            <label>Current password</label>
+            <input type="password" name="current_password" required>
+
+            <label>New password</label>
+            <input type="password" name="new_password" required>
+
+            <label>Confirm new password</label>
+            <input type="password" name="confirm_password" required>
+
+            <button type="submit">Change Password</button>
+        </form>
+    </div>
+</details>
+
+<details class="drawer"{% if open_section == '2fa-interval' %} open{% endif %}>
+    <summary>Time between two-factor checks</summary>
+    <div class="drawer-body">
+        <p class="page-note flush-top">How many hours a browser you have just verified is trusted before you are asked for a code again. 0 means a code at every login. The longest allowed is {{ max_hours }} hours.</p>
+        <form method="post" action="/user-info/2fa-interval" class="form-narrow">
+            <label>Hours</label>
+            <input type="number" name="hours" min="0" max="{{ max_hours }}" step="1" value="{{ info.twofa_interval_hours }}" required>
+
+            <button type="submit">Save</button>
+        </form>
+    </div>
+</details>
+
+<details class="drawer"{% if open_section == 'reset-2fa' %} open{% endif %}>
+    <summary>Reset two-factor authentication</summary>
+    <div class="drawer-body">
+        <p class="page-note flush-top">This removes your authenticator and recovery codes. You will be asked to set up a new authenticator the next time you log in.</p>
+        <form method="post" action="/user-info/reset-2fa" class="form-narrow">
+            <label>Current password</label>
+            <input type="password" name="current_password" required>
+
+            <button type="submit" class="danger">Reset Two-Factor Authentication</button>
+        </form>
+    </div>
+</details>
+{% endblock %}

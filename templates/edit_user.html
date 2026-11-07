@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Edit User — BMAC{% endblock %}
+{% block content %}
+<h1>Edit User</h1>
+<p class="page-note"><a href="/admin/users">&larr; All users</a></p>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if success %}<p class="success">{{ success }}</p>{% endif %}
+
+<div class="result form-narrow">
+    <div class="row"><span class="label">Status</span><span class="value">{{ 'Locked' if user.locked else 'Active' }}</span></div>
+    <div class="row"><span class="label">Two-factor authentication</span><span class="value">{{ 'On' if user.twofa_enabled else 'Not set up' }}</span></div>
+</div>
+
+<form method="post" action="/admin/users/{{ user.user_id }}/edit" class="form-narrow">
+    <label>Username</label>
+    <input type="text" value="{{ user.username }}" disabled>
+
+    <label>Full Name</label>
+    <input type="text" name="full_name" value="{{ user.full_name or '' }}" required>
+
+    <label style="display: flex; align-items: center; gap: 8px; margin-top: 15px;">
+        <input type="checkbox" name="is_admin" style="width: auto;"{% if user.is_admin %} checked{% endif %}>
+        Grant admin access (sees all projects, bypasses restrictions)
+    </label>
+    {% if user.user_id == own_id %}<p class="hint">You cannot remove your own admin access.</p>{% endif %}
+
+    <label style="margin-top: 15px;">Project Access</label>
+    {% for project in user.all_projects %}
+    <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; margin-top: 6px;">
+        <input type="checkbox" name="projects" value="{{ project }}" style="width: auto;"{% if project in user.projects %} checked{% endif %}>
+        {{ project }}
+    </label>
+    {% endfor %}
+    {% if not user.all_projects %}<p class="hint">There are no projects yet.</p>{% endif %}
+
+    <button type="submit">Save</button>
+</form>
+
+<details class="drawer"{% if open_section == 'password' %} open{% endif %}>
+    <summary>Set password</summary>
+    <div class="drawer-body">
+        <form method="post" action="/admin/users/{{ user.user_id }}/password" class="form-narrow">
+            <label>New password</label>
+            <input type="password" name="new_password" required>
+
+            <button type="submit">Set Password</button>
+        </form>
+    </div>
+</details>
+
+<details class="drawer"{% if open_section == 'reset-2fa' %} open{% endif %}>
+    <summary>Reset two-factor authentication</summary>
+    <div class="drawer-body">
+        <p class="page-note flush-top">This removes the user's authenticator and recovery codes. They will be asked to set up a new authenticator the next time they log in.</p>
+        <form method="post" action="/admin/users/{{ user.user_id }}/reset-2fa" class="form-narrow"
+              data-confirm="Reset two-factor authentication for {{ user.username }}?">
+            <button type="submit" class="danger">Reset Two-Factor Authentication</button>
+        </form>
+    </div>
+</details>
+
+<script>
+    // Ask before a form that has a data-confirm message is sent
+    document.addEventListener('submit', event => {
+        const message = event.target.dataset.confirm;
+        if (message && !confirm(message)) {
+            event.preventDefault();
+        }
+    });
+</script>
+{% endblock %}

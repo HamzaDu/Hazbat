@@ -65,7 +65,7 @@ def form_state(*dicts):
 
 def record_exists(table: str, id_column: str, value: str) -> bool:
     """True if a row with this ID exists. Table/column names come from our own code."""
-    conn = get_connection()
+    conn = get_connection(read_only=True)
     cur = conn.cursor()
     try:
         cur.execute(f"SELECT 1 FROM {table} WHERE {id_column} = %s", (value,))
@@ -77,7 +77,7 @@ def record_exists(table: str, id_column: str, value: str) -> bool:
 
 def coating_electrode(coating_id: str):
     """'cathode' / 'anode' for a coating (from its material's CAT-/AN- prefix), or None if not found."""
-    conn = get_connection()
+    conn = get_connection(read_only=True)
     cur = conn.cursor()
     try:
         cur.execute("SELECT material_id FROM tbl_coating WHERE coating_id = %s", (coating_id,))
@@ -92,7 +92,7 @@ def coating_electrode(coating_id: str):
 
 def load_form_options():
     """Lists that fill the dropdowns on the New Coating / SLP / Coin Cell / MLP forms."""
-    conn = get_connection()
+    conn = get_connection(read_only=True)
     cur = conn.cursor()
     try:
         cur.execute("SELECT project_name FROM tbl_projects WHERE active ORDER BY project_name")

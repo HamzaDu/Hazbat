@@ -12,6 +12,7 @@ from datetime import datetime
 import pandas as pd
 
 from services.forms import clean_optional_fields, coating_electrode, insert_record, record_exists
+from services.records import project_visible
 
 
 # Cells that mean "no data". Stored as NULL in the database and shown as "—" on every page.
@@ -72,8 +73,9 @@ def read_upload(contents: bytes, filename: str):
     return df.to_dict("records")
 
 
-def process_bulk_upload(rows, table: str, check=None):
-    """Validate and insert each row. check(values) may return an error message for a row.
+def process_bulk_upload(rows, table: str, allowed, check=None):
+    """Validate and insert each row. A row for a project the user may not use fails (allowed is None for admins).
+    check(values) may return an error message for a row.
     Returns {"success": [...ids], "failed": [{"row", "reason"}], "ignored": [...unknown columns]}."""
     spec = BULK_SPECS[table]
     known = spec["required"] + spec["numeric"] + spec["dates"] + spec["text"]
@@ -96,6 +98,10 @@ def process_bulk_upload(rows, table: str, check=None):
         missing = [k for k in spec["required"] if not values.get(k)]
         if missing:
             failed.append({"row": row_num, "reason": f"Missing required field(s): {', '.join(missing)}."})
+            continue
+
+        if "project" in spec["required"] and not project_visible(values["project"], allowed):
+            failed.append({"row": row_num, "reason": f"You don't have access to project '{values['project']}'."})
             continue
 
         record_id = values[spec["id"]]
