@@ -42,7 +42,7 @@ jobs:
         with:
           python-version: 3.12
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
       - name: Wait for PostgreSQL to be ready
         run: |
           until pg_isready -h localhost -p 5432 -U hazbat_admin; do
