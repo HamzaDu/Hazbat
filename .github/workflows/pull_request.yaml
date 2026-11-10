@@ -69,5 +69,9 @@ jobs:
           disable_2fa = true
           EOF
           python3 -m scripts.dbgen
+      - name: Seed database
+        env:
+          PGPASSWORD: password
+        run: psql -v ON_ERROR_STOP=1 -h localhost -p 5432 -U hazbat_admin -d bmac -f .devcontainer/db-init/02-dev-seed.sql
       - name: Run tests
         run: pytest -v
