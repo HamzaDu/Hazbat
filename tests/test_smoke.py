@@ -10,19 +10,21 @@ Needs a database built from schema.sql plus the dev seed
 (.devcontainer/db-init/02-dev-seed.sql), with DATABASE_URL pointing at it.
 The tests are skipped if no database can be reached.
 """
+
 import os
 import sys
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
+from psycopg2 import OperationalError
+
+import main
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)  # templates/ and static/ are found relative to the repo folder
 
-from fastapi.testclient import TestClient  # noqa: E402
-
-import main  # noqa: E402
 
 try:
     from core.db import get_connection  # after main.py was split up
@@ -34,15 +36,19 @@ def database_available() -> bool:
     try:
         get_connection().close()
         return True
-    except Exception:
+    except OperationalError:
         return False
 
 
-pytestmark = pytest.mark.skipif(not database_available(), reason="no database reachable (set DATABASE_URL)")
+pytestmark = pytest.mark.skipif(
+    not database_available(), reason="no database reachable (set DATABASE_URL)"
+)
 
 
 def first_id(table: str, column: str):
-    """An ID that exists in the database, so card/lineage pages have something to show."""
+    """An ID that exists in the database, so card/lineage pages have something
+    to show.
+    """
     conn = get_connection()
     cur = conn.cursor()
     cur.execute(f"SELECT {column} FROM {table} ORDER BY {column} LIMIT 1")
@@ -53,22 +59,57 @@ def first_id(table: str, column: str):
 
 
 PAGES = [
-    "/", "/login", "/chart", "/graph", "/directory",
-    "/inventory/materials", "/inventory/coatings", "/inventory/slp", "/inventory/coincell", "/inventory/mlp",
-    "/inventory/materials/export", "/inventory/coatings/export?format=xlsx",
-    "/materials/new", "/coatings/new", "/slp/new", "/coincell/new", "/mlp/new",
-    "/materials/bulk-upload", "/coatings/bulk-upload", "/slp/bulk-upload", "/coincell/bulk-upload", "/mlp/bulk-upload",
-    "/cycling/upload", "/HAZbot", "/admin/users/new",
-    "/api/graph", "/api/filters",
-    "/api/chart/formation-capacity", "/api/chart/my-projects", "/api/chart/gsm-by-coating",
-    "/api/chart/records-per-table", "/api/chart/coatings-over-time",
+    "/",
+    "/login",
+    "/chart",
+    "/graph",
+    "/directory",
+    "/inventory/materials",
+    "/inventory/coatings",
+    "/inventory/slp",
+    "/inventory/coincell",
+    "/inventory/mlp",
+    "/inventory/materials/export",
+    "/inventory/coatings/export?format=xlsx",
+    "/materials/new",
+    "/coatings/new",
+    "/slp/new",
+    "/coincell/new",
+    "/mlp/new",
+    "/materials/bulk-upload",
+    "/coatings/bulk-upload",
+    "/slp/bulk-upload",
+    "/coincell/bulk-upload",
+    "/mlp/bulk-upload",
+    "/cycling/upload",
+    "/HAZbot",
+    "/admin/users/new",
+    "/api/graph",
+    "/api/filters",
+    "/api/chart/formation-capacity",
+    "/api/chart/my-projects",
+    "/api/chart/gsm-by-coating",
+    "/api/chart/records-per-table",
+    "/api/chart/coatings-over-time",
 ]
 
-RECORD_PAGES = ["/directory?record_id={id}", "/card/{id}", "/card/{id}/lineage", "/api/card/{id}",
-                "/api/lineage/{id}", "/qr/{id}.png", "/api/graph/{id}"]
+RECORD_PAGES = [
+    "/directory?record_id={id}",
+    "/card/{id}",
+    "/card/{id}/lineage",
+    "/api/card/{id}",
+    "/api/lineage/{id}",
+    "/qr/{id}.png",
+    "/api/graph/{id}",
+]
 
-RECORD_TABLES = [("tbl_materials", "material_id"), ("tbl_coating", "coating_id"), ("tbl_slp", "slp_id"),
-                 ("tbl_coincell", "coincell_id"), ("tbl_mlp", "mlp_id")]
+RECORD_TABLES = [
+    ("tbl_materials", "material_id"),
+    ("tbl_coating", "coating_id"),
+    ("tbl_slp", "slp_id"),
+    ("tbl_coincell", "coincell_id"),
+    ("tbl_mlp", "mlp_id"),
+]
 
 
 @pytest.fixture(scope="module")

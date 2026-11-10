@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Starts the web server (uvicorn). Options uvicorn takes on its command line that come from the config file are added here.
+# Starts the web server (uvicorn). Options uvicorn takes on its command line
+# that come from the config file are added here.
 #   python3 -m scripts.serve   (from /app)
 
 import os

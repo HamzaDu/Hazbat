@@ -1,5 +1,7 @@
+import re
+
 import requests
-from typing import Optional
+from pymatgen.core import Composition
 
 from core.varreg import settings
 
@@ -7,18 +9,36 @@ GEMINI_API_KEY = settings.get("app", "gemini_api_key")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
 SCHEMA_DESCRIPTION = """
-tbl_materials(material_id, chemistry, supplier, date_received, quantity_kg, location, availability)
-tbl_coating(coating_id, material_id, project, coating_date, made_by, coat_weight_gsm, porosity)
-tbl_slp(slp_id, coating_id, project, date_made, made_by, electrolyte, formation_capacity)
-tbl_coincell(coincell_id, coating_id, project, date_made, made_by, electrolyte, formation_capacity)
-tbl_mlp(mlp_id, cat_coating_id, an_coating_id, project, date_made, cell_capacity)
+tbl_materials(
+    material_id, chemistry, supplier, date_received, quantity_kg, location,
+    availability
+)
+tbl_coating(
+    coating_id, material_id, project, coating_date, made_by, coat_weight_gsm,
+    porosity
+)
+tbl_slp(
+    slp_id, coating_id, project, date_made, made_by, electrolyte,
+    formation_capacity
+)
+tbl_coincell(
+    coincell_id, coating_id, project, date_made, made_by, electrolyte,
+    formation_capacity
+)
+tbl_mlp(
+    mlp_id, cat_coating_id, an_coating_id, project, date_made, cell_capacity
+)
 """
 
 
 def ask_ai_for_sql(question: str) -> str:
-    # First, check if this looks like a pure chemistry question pymatgen can answer directly
+    # First, check if this looks like a pure chemistry question pymatgen can
+    # answer directly.
     chem_result = try_composition_analysis(question)
-    if chem_result and any(word in question.lower() for word in ["formula", "molar mass", "composition", "analyze", "element"]):
+    if chem_result and any(
+        word in question.lower()
+        for word in ["formula", "molar mass", "composition", "analyze", "element"]
+    ):
         return f"SQL: SELECT 1\nINSIGHT: {chem_result}"
 
     prompt = (
@@ -34,7 +54,7 @@ def ask_ai_for_sql(question: str) -> str:
         GEMINI_URL,
         params={"key": GEMINI_API_KEY},
         json={"contents": [{"parts": [{"text": prompt}]}]},
-        timeout=15
+        timeout=15,
     )
 
     if response.status_code != 200:
@@ -48,19 +68,14 @@ def ask_ai_for_sql(question: str) -> str:
 
     return raw_text
 
-from pymatgen.core import Composition
-from typing import Optional
-from pymatgen.core import Composition
-import re
 
-
-def try_composition_analysis(question: str) -> Optional[str]:
+def try_composition_analysis(question: str) -> str | None:
     """
     If the question contains something that looks like a chemical formula,
     analyze it with pymatgen and return a plain-English summary.
     Returns None if no formula-like pattern is found.
     """
-    match = re.search(r'\b([A-Z][a-z]?\d*\.?\d*){2,}\b', question)
+    match = re.search(r"\b([A-Z][a-z]?\d*\.?\d*){2,}\b", question)
     if not match:
         return None
 
@@ -68,7 +83,9 @@ def try_composition_analysis(question: str) -> Optional[str]:
     try:
         comp = Composition(candidate)
         elements = ", ".join(str(e) for e in comp.elements)
-        fractions = ", ".join(f"{el}: {frac:.1%}" for el, frac in comp.fractional_composition.items())
+        fractions = ", ".join(
+            f"{el}: {frac:.1%}" for el, frac in comp.fractional_composition.items()
+        )
         return (
             f"Analyzed formula '{candidate}': "
             f"molar mass {comp.weight:.2f} g/mol, "

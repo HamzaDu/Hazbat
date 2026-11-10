@@ -19,8 +19,14 @@ def chart_formation_capacity(request: Request):
     conn = get_connection(read_only=True)
     cur = conn.cursor()
     allowed = get_allowed_projects(request)  # None = admin, sees everything
-    extra, params = ("", ()) if allowed is None else (" AND project = ANY(%s)", (list(allowed),))
-    cur.execute("SELECT slp_id, formation_capacity FROM tbl_slp WHERE formation_capacity IS NOT NULL" + extra + " ORDER BY slp_id", params)
+    extra, params = (
+        ("", ()) if allowed is None else (" AND project = ANY(%s)", (list(allowed),))
+    )
+    cur.execute(
+        "SELECT slp_id, formation_capacity FROM tbl_slp "
+        "WHERE formation_capacity IS NOT NULL" + extra + " ORDER BY slp_id",
+        params,
+    )
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -28,6 +34,7 @@ def chart_formation_capacity(request: Request):
     labels = [r[0] for r in rows]
     values = [float(r[1]) for r in rows]
     return JSONResponse({"labels": labels, "values": values})
+
 
 @router.get("/chart", response_class=HTMLResponse)
 def chart_page(request: Request):
@@ -62,14 +69,16 @@ def chart_my_projects(request: Request):
         coincell = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM tbl_mlp WHERE project = %s", (project,))
         mlp = cur.fetchone()[0]
-        results.append({
-            "project": project,
-            "coatings": coatings,
-            "slp": slp,
-            "coincell": coincell,
-            "mlp": mlp,
-            "total": coatings + slp + coincell + mlp
-        })
+        results.append(
+            {
+                "project": project,
+                "coatings": coatings,
+                "slp": slp,
+                "coincell": coincell,
+                "mlp": mlp,
+                "total": coatings + slp + coincell + mlp,
+            }
+        )
 
     cur.close()
     conn.close()
@@ -85,12 +94,20 @@ def chart_gsm(request: Request):
     conn = get_connection(read_only=True)
     cur = conn.cursor()
     allowed = get_allowed_projects(request)  # None = admin, sees everything
-    extra, params = ("", ()) if allowed is None else (" AND project = ANY(%s)", (list(allowed),))
-    cur.execute("SELECT coating_id, coat_weight_gsm FROM tbl_coating WHERE coat_weight_gsm IS NOT NULL" + extra + " ORDER BY coating_id", params)
+    extra, params = (
+        ("", ()) if allowed is None else (" AND project = ANY(%s)", (list(allowed),))
+    )
+    cur.execute(
+        "SELECT coating_id, coat_weight_gsm FROM tbl_coating "
+        "WHERE coat_weight_gsm IS NOT NULL" + extra + " ORDER BY coating_id",
+        params,
+    )
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    return JSONResponse({"labels": [r[0] for r in rows], "values": [float(r[1]) for r in rows]})
+    return JSONResponse(
+        {"labels": [r[0] for r in rows], "values": [float(r[1]) for r in rows]}
+    )
 
 
 @router.get("/api/chart/records-per-table")
@@ -103,15 +120,26 @@ def chart_records_per_table(request: Request):
     cur = conn.cursor()
     allowed = get_allowed_projects(request)  # None = admin, sees everything
     counts = {}
-    for label, table in [("Materials", "tbl_materials"), ("Coatings", "tbl_coating"),
-                          ("SLP", "tbl_slp"), ("Coin Cells", "tbl_coincell"), ("MLP", "tbl_mlp")]:
+    for label, table in [
+        ("Materials", "tbl_materials"),
+        ("Coatings", "tbl_coating"),
+        ("SLP", "tbl_slp"),
+        ("Coin Cells", "tbl_coincell"),
+        ("MLP", "tbl_mlp"),
+    ]:
         # Materials have no project column
-        where, params = ("", ()) if allowed is None or table == "tbl_materials" else (" WHERE project = ANY(%s)", (list(allowed),))
+        where, params = (
+            ("", ())
+            if allowed is None or table == "tbl_materials"
+            else (" WHERE project = ANY(%s)", (list(allowed),))
+        )
         cur.execute(f"SELECT COUNT(*) FROM {table}" + where, params)
         counts[label] = cur.fetchone()[0]
     cur.close()
     conn.close()
-    return JSONResponse({"labels": list(counts.keys()), "values": list(counts.values())})
+    return JSONResponse(
+        {"labels": list(counts.keys()), "values": list(counts.values())}
+    )
 
 
 @router.get("/api/chart/coatings-over-time")
@@ -123,14 +151,19 @@ def chart_coatings_over_time(request: Request):
     conn = get_connection(read_only=True)
     cur = conn.cursor()
     allowed = get_allowed_projects(request)  # None = admin, sees everything
-    cur.execute("""
-        SELECT coating_date, COUNT(*) 
-        FROM tbl_coating 
-        WHERE coating_date IS NOT NULL AND (%s OR project = ANY(%s)) 
-        GROUP BY coating_date 
+    cur.execute(
+        """
+        SELECT coating_date, COUNT(*)
+        FROM tbl_coating
+        WHERE coating_date IS NOT NULL AND (%s OR project = ANY(%s))
+        GROUP BY coating_date
         ORDER BY coating_date
-    """, (allowed is None, list(allowed or [])))
+    """,
+        (allowed is None, list(allowed or [])),
+    )
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    return JSONResponse({"labels": [str(r[0]) for r in rows], "values": [r[1] for r in rows]})
+    return JSONResponse(
+        {"labels": [str(r[0]) for r in rows], "values": [r[1] for r in rows]}
+    )

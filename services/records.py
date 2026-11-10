@@ -8,7 +8,9 @@ from core.db import get_connection
 
 
 def detect_record_type(record_id: str) -> str:
-    """Record type from an ID: 'material', 'coating', 'slp', 'coincell', 'mlp' or None."""
+    """Record type from an ID: 'material', 'coating', 'slp', 'coincell', 'mlp'
+    or None.
+    """
     rid = record_id.upper()
     if "-SLP-" in rid:
         return "slp"
@@ -18,7 +20,7 @@ def detect_record_type(record_id: str) -> str:
         return "coincell"
     if "-C0" in rid or "-C1" in rid:
         return "coating"
-    if rid.startswith("CAT") or rid.startswith("AN"):
+    if rid.startswith(("CAT", "AN")):
         return "material"
     return None
 
@@ -27,19 +29,24 @@ CELL_TYPES = ("slp", "coincell", "mlp")
 
 # Record types that belong to a project: (table, ID column). Materials do not.
 PROJECT_TABLES = {
-    "coating": ("tbl_coating", "coating_id"), "slp": ("tbl_slp", "slp_id"),
-    "coincell": ("tbl_coincell", "coincell_id"), "mlp": ("tbl_mlp", "mlp_id"),
+    "coating": ("tbl_coating", "coating_id"),
+    "slp": ("tbl_slp", "slp_id"),
+    "coincell": ("tbl_coincell", "coincell_id"),
+    "mlp": ("tbl_mlp", "mlp_id"),
 }
 
 
 def project_visible(project: str, allowed) -> bool:
-    """True if a user may use this project. allowed is the list from get_allowed_projects (None = everything)."""
+    """True if a user may use this project. allowed is the list from
+    get_allowed_projects (None = everything).
+    """
     return allowed is None or project in allowed
 
 
 def record_visible(record_id: str, allowed) -> bool:
-    """True if a user may see this record. Materials have no project, so anyone may see them.
-    An ID that is not a known type is hidden. A record that does not exist counts as visible,
+    """True if a user may see this record. Materials have no project, so
+    anyone may see them. An ID that is not a known type is hidden. A record
+    that does not exist counts as visible,
     so the caller's own 'not found' applies."""
     if allowed is None:
         return True

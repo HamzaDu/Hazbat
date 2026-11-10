@@ -29,9 +29,12 @@ def main():
 
     replacing = user_exists(username)
     if replacing:
-        print(f"WARNING: user '{username}' already exists. Replacing it deletes that user completely, "
-              "including their API keys, two-factor setup and project access, and creates a new administrator "
-              "with the details you enter now.")
+        print(
+            f"WARNING: user '{username}' already exists. Replacing it deletes "
+            "that user completely, including their API keys, two-factor setup "
+            "and project access, and creates a new administrator "
+            "with the details you enter now."
+        )
         if input("Replace it? [y/N]: ").strip().lower() != "y":
             sys.exit("Cancelled")
 
@@ -52,11 +55,14 @@ def main():
     conn = get_admin_connection()
     cur = conn.cursor()
     try:
-        # The foreign keys delete the old user's projects, API keys and two-factor data with it
+        # The foreign keys delete the old user's projects, API keys and
+        # two-factor data with it
         cur.execute("DELETE FROM tbl_users WHERE username = %s", (username,))
         cur.execute(
-            "INSERT INTO tbl_users (username, password_hash, full_name, is_admin) VALUES (%s, %s, %s, TRUE)",
-            (username, password_hash, full_name)
+            "INSERT INTO tbl_users "
+            "(username, password_hash, full_name, is_admin) "
+            "VALUES (%s, %s, %s, TRUE)",
+            (username, password_hash, full_name),
         )
         conn.commit()
     finally:

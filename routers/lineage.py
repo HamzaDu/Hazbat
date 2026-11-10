@@ -17,7 +17,9 @@ router = APIRouter()
 
 @router.get("/card/{record_id}/lineage", response_class=HTMLResponse)
 def lineage_page(request: Request, record_id: str):
-    """Lineage & passport page for a cell (other records are sent to their basic card)."""
+    """Lineage & passport page for a cell (other records are sent to their
+    basic card).
+    """
     redirect = require_login(request)
     if redirect:
         return redirect
@@ -48,7 +50,10 @@ def lineage_data(request: Request, record_id: str):
         return redirect
     record_type = detect_record_type(record_id)
     if record_type not in CELL_TYPES:
-        return JSONResponse({"error": "Lineage is only available for cells (SLP, coin cell, MLP)"}, status_code=404)
+        return JSONResponse(
+            {"error": "Lineage is only available for cells (SLP, coin cell, MLP)"},
+            status_code=404,
+        )
     if not record_visible(record_id, get_allowed_projects(request)):
         return JSONResponse({"error": "Record not found"}, status_code=404)
 

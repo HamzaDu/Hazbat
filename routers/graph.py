@@ -18,9 +18,12 @@ router = APIRouter()
 
 # --- Whole graph -------------------------------------------------------------
 
+
 @router.get("/api/graph")
 def traceability_graph(request: Request):
-    """Every record as graph nodes, linked material -> coating -> cell, plus dashed links to projects."""
+    """Every record as graph nodes, linked material -> coating -> cell, plus
+    dashed links to projects.
+    """
     redirect = require_login(request)
     if redirect:
         return redirect
@@ -28,7 +31,9 @@ def traceability_graph(request: Request):
     cur = conn.cursor()
 
     allowed = get_allowed_projects(request)  # None = admin, sees everything
-    where, params = ("", ()) if allowed is None else (" WHERE project = ANY(%s)", (list(allowed),))
+    where, params = (
+        ("", ()) if allowed is None else (" WHERE project = ANY(%s)", (list(allowed),))
+    )
 
     nodes = []
     edges = []
@@ -37,14 +42,24 @@ def traceability_graph(request: Request):
     def add_project_node(project_name):
         """Add a project node the first time that project is seen."""
         if project_name and project_name not in seen_projects:
-            nodes.append({"id": f"PROJECT-{project_name}", "label": project_name, "group": "project"})
+            nodes.append(
+                {
+                    "id": f"PROJECT-{project_name}",
+                    "label": project_name,
+                    "group": "project",
+                }
+            )
             seen_projects.add(project_name)
 
     cur.execute("SELECT material_id, chemistry FROM tbl_materials")
     for mat_id, chem in cur.fetchall():
-        nodes.append({"id": mat_id, "label": mat_id, "group": "material", "title": chem or ""})
+        nodes.append(
+            {"id": mat_id, "label": mat_id, "group": "material", "title": chem or ""}
+        )
 
-    cur.execute("SELECT coating_id, material_id, project FROM tbl_coating" + where, params)
+    cur.execute(
+        "SELECT coating_id, material_id, project FROM tbl_coating" + where, params
+    )
     for coat_id, mat_id, project in cur.fetchall():
         nodes.append({"id": coat_id, "label": coat_id, "group": "coating"})
         edges.append({"from": mat_id, "to": coat_id})
@@ -60,7 +75,9 @@ def traceability_graph(request: Request):
         if project:
             edges.append({"from": slp_id, "to": f"PROJECT-{project}", "dashes": True})
 
-    cur.execute("SELECT coincell_id, coating_id, project FROM tbl_coincell" + where, params)
+    cur.execute(
+        "SELECT coincell_id, coating_id, project FROM tbl_coincell" + where, params
+    )
     for cc_id, coat_id, project in cur.fetchall():
         nodes.append({"id": cc_id, "label": cc_id, "group": "coincell"})
         edges.append({"from": coat_id, "to": cc_id})
@@ -68,7 +85,10 @@ def traceability_graph(request: Request):
         if project:
             edges.append({"from": cc_id, "to": f"PROJECT-{project}", "dashes": True})
 
-    cur.execute("SELECT mlp_id, cat_coating_id, an_coating_id, project FROM tbl_mlp" + where, params)
+    cur.execute(
+        "SELECT mlp_id, cat_coating_id, an_coating_id, project FROM tbl_mlp" + where,
+        params,
+    )
     for mlp_id, cat_id, an_id, project in cur.fetchall():
         nodes.append({"id": mlp_id, "label": mlp_id, "group": "mlp"})
         edges.append({"from": cat_id, "to": mlp_id})
@@ -84,6 +104,7 @@ def traceability_graph(request: Request):
     edges = [e for e in edges if e["from"] in node_ids and e["to"] in node_ids]
     return JSONResponse({"nodes": nodes, "edges": edges})
 
+
 @router.get("/graph", response_class=HTMLResponse)
 def graph_page(request: Request):
     """Traceability graph page."""
@@ -94,6 +115,7 @@ def graph_page(request: Request):
 
 
 # --- One record and its neighbours -------------------------------------------
+
 
 @router.get("/api/graph/{record_id}")
 def record_graph(request: Request, record_id: str):
@@ -123,13 +145,17 @@ def record_graph(request: Request, record_id: str):
     add_node(record_id, record_type)
 
     if record_type == "material":
-        cur.execute("SELECT coating_id FROM tbl_coating WHERE material_id = %s", (record_id,))
+        cur.execute(
+            "SELECT coating_id FROM tbl_coating WHERE material_id = %s", (record_id,)
+        )
         for (coating_id,) in cur.fetchall():
             add_node(coating_id, "coating")
             edges.append({"from": record_id, "to": coating_id})
 
     elif record_type == "coating":
-        cur.execute("SELECT material_id FROM tbl_coating WHERE coating_id = %s", (record_id,))
+        cur.execute(
+            "SELECT material_id FROM tbl_coating WHERE coating_id = %s", (record_id,)
+        )
         row = cur.fetchone()
         if row:
             add_node(row[0], "material")
@@ -140,12 +166,18 @@ def record_graph(request: Request, record_id: str):
             add_node(slp_id, "slp")
             edges.append({"from": record_id, "to": slp_id})
 
-        cur.execute("SELECT coincell_id FROM tbl_coincell WHERE coating_id = %s", (record_id,))
+        cur.execute(
+            "SELECT coincell_id FROM tbl_coincell WHERE coating_id = %s", (record_id,)
+        )
         for (cc_id,) in cur.fetchall():
             add_node(cc_id, "coincell")
             edges.append({"from": record_id, "to": cc_id})
 
-        cur.execute("SELECT mlp_id FROM tbl_mlp WHERE cat_coating_id = %s OR an_coating_id = %s", (record_id, record_id))
+        cur.execute(
+            "SELECT mlp_id FROM tbl_mlp "
+            "WHERE cat_coating_id = %s OR an_coating_id = %s",
+            (record_id, record_id),
+        )
         for (mlp_id,) in cur.fetchall():
             add_node(mlp_id, "mlp")
             edges.append({"from": record_id, "to": mlp_id})
@@ -160,20 +192,29 @@ def record_graph(request: Request, record_id: str):
             add_node(coating_id, "coating")
             edges.append({"from": coating_id, "to": record_id})
 
-            cur.execute("SELECT material_id FROM tbl_coating WHERE coating_id = %s", (coating_id,))
+            cur.execute(
+                "SELECT material_id FROM tbl_coating WHERE coating_id = %s",
+                (coating_id,),
+            )
             mat_row = cur.fetchone()
             if mat_row:
                 add_node(mat_row[0], "material")
                 edges.append({"from": mat_row[0], "to": coating_id})
 
     elif record_type == "mlp":
-        cur.execute("SELECT cat_coating_id, an_coating_id FROM tbl_mlp WHERE mlp_id = %s", (record_id,))
+        cur.execute(
+            "SELECT cat_coating_id, an_coating_id FROM tbl_mlp WHERE mlp_id = %s",
+            (record_id,),
+        )
         row = cur.fetchone()
         if row:
             for coating_id in row:
                 add_node(coating_id, "coating")
                 edges.append({"from": coating_id, "to": record_id})
-                cur.execute("SELECT material_id FROM tbl_coating WHERE coating_id = %s", (coating_id,))
+                cur.execute(
+                    "SELECT material_id FROM tbl_coating WHERE coating_id = %s",
+                    (coating_id,),
+                )
                 mat_row = cur.fetchone()
                 if mat_row:
                     add_node(mat_row[0], "material")
@@ -187,6 +228,7 @@ def record_graph(request: Request, record_id: str):
 
 
 # --- Filter options ----------------------------------------------------------
+
 
 @router.get("/api/filters")
 def graph_filters(request: Request):
@@ -233,22 +275,36 @@ def graph_filters(request: Request):
 
     result = {
         "material": {
-            "chemistry":    distinct("SELECT DISTINCT chemistry FROM tbl_materials ORDER BY 1"),
-            "supplier":     distinct("SELECT DISTINCT supplier FROM tbl_materials ORDER BY 1"),
-            "location":     distinct("SELECT DISTINCT location FROM tbl_materials ORDER BY 1"),
-            "availability": distinct("SELECT DISTINCT availability FROM tbl_materials ORDER BY 1"),
-            "quantity_kg":  value_range("SELECT MIN(quantity_kg), MAX(quantity_kg) FROM tbl_materials"),
+            "chemistry": distinct(
+                "SELECT DISTINCT chemistry FROM tbl_materials ORDER BY 1"
+            ),
+            "supplier": distinct(
+                "SELECT DISTINCT supplier FROM tbl_materials ORDER BY 1"
+            ),
+            "location": distinct(
+                "SELECT DISTINCT location FROM tbl_materials ORDER BY 1"
+            ),
+            "availability": distinct(
+                "SELECT DISTINCT availability FROM tbl_materials ORDER BY 1"
+            ),
+            "quantity_kg": value_range(
+                "SELECT MIN(quantity_kg), MAX(quantity_kg) FROM tbl_materials"
+            ),
         },
         "coating": {
-            "made_by":         distinct("SELECT DISTINCT made_by FROM tbl_coating ORDER BY 1"),
-            "coat_weight_gsm": value_range("SELECT MIN(coat_weight_gsm), MAX(coat_weight_gsm) FROM tbl_coating"),
-            "porosity":        value_range("SELECT MIN(porosity), MAX(porosity) FROM tbl_coating"),
+            "made_by": distinct("SELECT DISTINCT made_by FROM tbl_coating ORDER BY 1"),
+            "coat_weight_gsm": value_range(
+                "SELECT MIN(coat_weight_gsm), MAX(coat_weight_gsm) FROM tbl_coating"
+            ),
+            "porosity": value_range(
+                "SELECT MIN(porosity), MAX(porosity) FROM tbl_coating"
+            ),
         },
         "cell": {
-            "made_by":            cells_made_by,
-            "electrolyte":        cells_electrolyte,
+            "made_by": cells_made_by,
+            "electrolyte": cells_electrolyte,
             "formation_capacity": cell_capacity,
-            "np_ratio":           value_range("SELECT MIN(np_ratio), MAX(np_ratio) FROM tbl_slp"),
+            "np_ratio": value_range("SELECT MIN(np_ratio), MAX(np_ratio) FROM tbl_slp"),
         },
     }
     cur.close()

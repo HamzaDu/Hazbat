@@ -7,7 +7,9 @@ from core.varreg import settings
 
 
 def main():
-    settings.require("database", "admin_password", "read_write_password", "read_only_password")
+    settings.require(
+        "database", "admin_password", "read_write_password", "read_only_password"
+    )
     setup_database()
 
 

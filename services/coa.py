@@ -22,13 +22,12 @@ from pathlib import Path
 
 from core.db import get_connection
 
-
 COA_DIR = Path("uploads/coa")
-MAX_COA_BYTES = 25 * 1024 * 1024        # 25 MB; supplier COAs are normally < 2 MB
+MAX_COA_BYTES = 25 * 1024 * 1024  # 25 MB; supplier COAs are normally < 2 MB
 CONVERT_TIMEOUT_S = 90
 ALLOWED_EXTENSIONS = {".pdf": "pdf", ".docx": "docx", ".doc": "doc"}
 KIND_LABELS = {"pdf": "PDF", "docx": "Word", "doc": "Word (97–2003)"}
-OLE_MAGIC = bytes.fromhex("D0CF11E0A1B11AE1")   # legacy .doc container
+OLE_MAGIC = bytes.fromhex("D0CF11E0A1B11AE1")  # legacy .doc container
 
 
 class CoaError(ValueError):
@@ -36,6 +35,7 @@ class CoaError(ValueError):
 
 
 # --- Checking -----------------------------------------------------------------
+
 
 def detect_kind(filename: str, data: bytes) -> str:
     """'pdf' / 'docx' / 'doc' if the file is really that type, else raises CoaError."""
@@ -55,15 +55,19 @@ def detect_kind(filename: str, data: bytes) -> str:
             with zipfile.ZipFile(BytesIO(data)) as z:
                 if "word/document.xml" not in z.namelist():
                     raise CoaError("That .docx file isn't a Word document.")
-        except zipfile.BadZipFile:
-            raise CoaError("That .docx file is damaged or isn't a Word document.")
+        except zipfile.BadZipFile as e:
+            raise CoaError(
+                "That .docx file is damaged or isn't a Word document."
+            ) from e
     if kind == "doc" and not data.startswith(OLE_MAGIC):
         raise CoaError("That .doc file isn't a Word 97–2003 document.")
     return kind
 
 
 def safe_display_name(filename: str) -> str:
-    """Keep the original name for display/download, minus any folder parts or control characters."""
+    """Keep the original name for display/download, minus any folder parts or
+    control characters.
+    """
     name = Path((filename or "coa").replace("\\", "/")).name
     name = "".join(ch for ch in name if ch.isprintable()).strip()
     return name[:200] or "coa"
@@ -71,23 +75,40 @@ def safe_display_name(filename: str) -> str:
 
 # --- Saving and converting -----------------------------------------------------
 
+
 def coa_folder(material_id: str) -> Path:
-    """uploads/coa/<material_id>/, with anything that isn't safe in a folder name replaced by _."""
+    """uploads/coa/<material_id>/, with anything that isn't safe in a folder
+    name replaced by _.
+    """
     return COA_DIR / (re.sub(r"[^A-Za-z0-9._-]", "_", material_id).strip(".") or "_")
 
 
 def convert_to_pdf(source: Path):
-    """Convert a Word file to PDF next to it with LibreOffice. Returns the PDF path or None."""
+    """Convert a Word file to PDF next to it with LibreOffice. Returns the PDF
+    path or None.
+    """
     soffice = shutil.which("soffice") or shutil.which("libreoffice")
     if not soffice:
         return None
-    # A throwaway LibreOffice profile per conversion, so two uploads at once don't clash.
+    # A throwaway LibreOffice profile per conversion, so two uploads at once
+    # don't clash.
     with tempfile.TemporaryDirectory(prefix="hazbat-lo-") as profile:
         try:
             subprocess.run(
-                [soffice, f"-env:UserInstallation=file://{profile}", "--headless", "--norestore",
-                 "--convert-to", "pdf", "--outdir", str(source.parent), str(source)],
-                check=True, timeout=CONVERT_TIMEOUT_S, capture_output=True,
+                [
+                    soffice,
+                    f"-env:UserInstallation=file://{profile}",
+                    "--headless",
+                    "--norestore",
+                    "--convert-to",
+                    "pdf",
+                    "--outdir",
+                    str(source.parent),
+                    str(source),
+                ],
+                check=True,
+                timeout=CONVERT_TIMEOUT_S,
+                capture_output=True,
             )
         except (subprocess.SubprocessError, OSError):
             return None
@@ -112,11 +133,20 @@ def save_coa(material_id: str, filename: str, data: bytes, uploaded_by=None) -> 
     cur = conn.cursor()
     try:
         cur.execute(
-            "INSERT INTO tbl_material_coa (material_id, filename, file_kind, file_path, preview_path, "
+            "INSERT INTO tbl_material_coa "
+            "(material_id, filename, file_kind, file_path, preview_path, "
             "size_bytes, sha256, uploaded_by) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
             "RETURNING " + COA_COLUMNS,
-            (material_id, safe_display_name(filename), kind, str(stored), str(preview) if preview else None,
-             len(data), hashlib.sha256(data).hexdigest(), uploaded_by),
+            (
+                material_id,
+                safe_display_name(filename),
+                kind,
+                str(stored),
+                str(preview) if preview else None,
+                len(data),
+                hashlib.sha256(data).hexdigest(),
+                uploaded_by,
+            ),
         )
         row = cur.fetchone()
         conn.commit()
@@ -134,22 +164,30 @@ def save_coa(material_id: str, filename: str, data: bytes, uploaded_by=None) -> 
 
 # --- Reading --------------------------------------------------------------------
 
-COA_COLUMNS = ("coa_id, material_id, filename, file_kind, file_path, preview_path, size_bytes, "
-               "uploaded_by, uploaded_at")
+COA_COLUMNS = (
+    "coa_id, material_id, filename, file_kind, file_path, preview_path, size_bytes, "
+    "uploaded_by, uploaded_at"
+)
 
 
 def coa_dict(row) -> dict:
     """One tbl_material_coa row as the dict the templates and JSON API use."""
     coa_id, material_id, filename, kind, file_path, preview_path, size, by, at = row
     return {
-        "coa_id": coa_id, "material_id": material_id, "filename": filename,
-        "kind": kind, "kind_label": KIND_LABELS.get(kind, kind),
-        "size_bytes": size, "size_label": human_size(size),
-        "uploaded_by": by, "uploaded_at": at.strftime("%d %b %Y, %H:%M") if at else None,
+        "coa_id": coa_id,
+        "material_id": material_id,
+        "filename": filename,
+        "kind": kind,
+        "kind_label": KIND_LABELS.get(kind, kind),
+        "size_bytes": size,
+        "size_label": human_size(size),
+        "uploaded_by": by,
+        "uploaded_at": at.strftime("%d %b %Y, %H:%M") if at else None,
         "has_preview": bool(preview_path),
         "preview_url": f"/coa/{coa_id}/preview" if preview_path else None,
         "download_url": f"/coa/{coa_id}/download",
-        "file_path": file_path, "preview_path": preview_path,
+        "file_path": file_path,
+        "preview_path": preview_path,
     }
 
 
@@ -165,7 +203,9 @@ def get_coa(coa_id: int):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute(f"SELECT {COA_COLUMNS} FROM tbl_material_coa WHERE coa_id = %s", (coa_id,))
+        cur.execute(
+            f"SELECT {COA_COLUMNS} FROM tbl_material_coa WHERE coa_id = %s", (coa_id,)
+        )
         row = cur.fetchone()
     finally:
         cur.close()
@@ -178,8 +218,11 @@ def list_coas(material_id: str) -> list:
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute(f"SELECT {COA_COLUMNS} FROM tbl_material_coa WHERE material_id = %s "
-                    "ORDER BY uploaded_at DESC, coa_id DESC", (material_id,))
+        cur.execute(
+            f"SELECT {COA_COLUMNS} FROM tbl_material_coa WHERE material_id = %s "
+            "ORDER BY uploaded_at DESC, coa_id DESC",
+            (material_id,),
+        )
         rows = cur.fetchall()
     finally:
         cur.close()
@@ -188,7 +231,9 @@ def list_coas(material_id: str) -> list:
 
 
 def latest_coas(material_ids) -> dict:
-    """{material_id: newest COA dict} for several materials in one query (cards grids)."""
+    """{material_id: newest COA dict} for several materials in one query
+    (cards grids).
+    """
     material_ids = list(material_ids)
     if not material_ids:
         return {}
@@ -197,7 +242,8 @@ def latest_coas(material_ids) -> dict:
     try:
         cur.execute(
             f"SELECT DISTINCT ON (material_id) {COA_COLUMNS} FROM tbl_material_coa "
-            "WHERE material_id = ANY(%s) ORDER BY material_id, uploaded_at DESC, coa_id DESC",
+            "WHERE material_id = ANY(%s) "
+            "ORDER BY material_id, uploaded_at DESC, coa_id DESC",
             (material_ids,),
         )
         rows = cur.fetchall()
@@ -208,7 +254,9 @@ def latest_coas(material_ids) -> dict:
 
 
 def material_summaries(material_ids) -> list:
-    """Fields shown on the small material cards (bulk upload results, new material page)."""
+    """Fields shown on the small material cards (bulk upload results, new
+    material page).
+    """
     material_ids = list(material_ids)
     if not material_ids:
         return []
@@ -216,8 +264,10 @@ def material_summaries(material_ids) -> list:
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT material_id, chemistry, supplier, quantity_kg, date_received, location "
-            "FROM tbl_materials WHERE material_id = ANY(%s)", (material_ids,),
+            "SELECT material_id, chemistry, supplier, quantity_kg, "
+            "date_received, location "
+            "FROM tbl_materials WHERE material_id = ANY(%s)",
+            (material_ids,),
         )
         found = {r[0]: r for r in cur.fetchall()}
     finally:
@@ -225,11 +275,20 @@ def material_summaries(material_ids) -> list:
         conn.close()
     coas = latest_coas(found)
     cards = []
-    for material_id in material_ids:            # keep the spreadsheet order
+    for material_id in material_ids:  # keep the spreadsheet order
         r = found.get(material_id)
         if r:
-            cards.append({"material_id": r[0], "chemistry": r[1], "supplier": r[2], "quantity_kg": r[3],
-                          "date_received": r[4], "location": r[5], "coa": public_coa(coas.get(r[0]))})
+            cards.append(
+                {
+                    "material_id": r[0],
+                    "chemistry": r[1],
+                    "supplier": r[2],
+                    "quantity_kg": r[3],
+                    "date_received": r[4],
+                    "location": r[5],
+                    "coa": public_coa(coas.get(r[0])),
+                }
+            )
     return cards
 
 
@@ -237,7 +296,9 @@ def material_exists(material_id: str) -> bool:
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT 1 FROM tbl_materials WHERE material_id = %s", (material_id,))
+        cur.execute(
+            "SELECT 1 FROM tbl_materials WHERE material_id = %s", (material_id,)
+        )
         return cur.fetchone() is not None
     finally:
         cur.close()

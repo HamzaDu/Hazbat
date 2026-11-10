@@ -5,16 +5,17 @@
 /qr/{id}.png    QR code that opens the card (the lineage page for cells)
 """
 
+import base64
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
-import base64
 
 from core.auth import get_allowed_projects, require_login
 from core.config import BASE_URL
 from core.db import get_connection
 from core.templates import templates
-from services.coa import latest_coas, public_coa
 from services.cards import card_path, fetch_card_record, make_qr_png, panel_fields
+from services.coa import latest_coas, public_coa
 from services.records import CELL_TYPES, detect_record_type, record_visible
 
 router = APIRouter()
@@ -29,7 +30,10 @@ def qr_code(request: Request, record_id: str):
     record_type = detect_record_type(record_id)
     if not record_type or not record_visible(record_id, get_allowed_projects(request)):
         return Response(status_code=404)
-    return Response(content=make_qr_png(BASE_URL + card_path(record_id, record_type)), media_type="image/png")
+    return Response(
+        content=make_qr_png(BASE_URL + card_path(record_id, record_type)),
+        media_type="image/png",
+    )
 
 
 @router.get("/card/{record_id}", response_class=HTMLResponse)
@@ -45,7 +49,9 @@ def view_card(request: Request, record_id: str):
         return HTMLResponse("Record not found.", status_code=404)
 
     # QR code: cells open their lineage & passport page, other records this card
-    qr_base64 = base64.b64encode(make_qr_png(BASE_URL + card_path(record_id, record_type))).decode()
+    qr_base64 = base64.b64encode(
+        make_qr_png(BASE_URL + card_path(record_id, record_type))
+    ).decode()
 
     conn = get_connection(read_only=True)
     cur = conn.cursor()
@@ -62,15 +68,24 @@ def view_card(request: Request, record_id: str):
         coa = public_coa(latest_coas([record_id]).get(record_id))
 
     return templates.TemplateResponse(
-        request, "card.html",
-        {"record_id": record_id, "record_type": record_type,
-         "record": record, "chain": chain, "qr_base64": qr_base64, "coa": coa}
+        request,
+        "card.html",
+        {
+            "record_id": record_id,
+            "record_type": record_type,
+            "record": record,
+            "chain": chain,
+            "qr_base64": qr_base64,
+            "coa": coa,
+        },
     )
 
 
 @router.get("/api/card/{record_id}")
 def card_data(request: Request, record_id: str):
-    """Card data as JSON; for cells it also includes the graph panel fields and links."""
+    """Card data as JSON; for cells it also includes the graph panel fields
+    and links.
+    """
     redirect = require_login(request)
     if redirect:
         return redirect
@@ -83,7 +98,7 @@ def card_data(request: Request, record_id: str):
     conn = get_connection(read_only=True)
     cur = conn.cursor()
     record, chain = fetch_card_record(cur, record_type, record_id)
-    
+
     if not record:
         cur.close()
         conn.close()
@@ -97,16 +112,23 @@ def card_data(request: Request, record_id: str):
     panel = {
         # Cells: use panel_fields() for curated display order/labels.
         # Materials & coatings: fall back to the raw (already stringified) record dict.
-        "fields": panel_fields(cur, record_type, record) if is_cell
-                  else [[k.replace("_", " ").title(), v] for k, v in record.items()],
-        "qr_url":      f"/qr/{record_id}.png",
-        "card_url":    f"/card/{record_id}",
+        "fields": panel_fields(cur, record_type, record)
+        if is_cell
+        else [[k.replace("_", " ").title(), v] for k, v in record.items()],
+        "qr_url": f"/qr/{record_id}.png",
+        "card_url": f"/card/{record_id}",
         "lineage_url": f"/card/{record_id}/lineage" if is_cell else None,
     }
 
     cur.close()
     conn.close()
 
-
-    return JSONResponse({"record_id": record_id, "record_type": record_type,
-                         "record": record, "chain": chain, "panel": panel})
+    return JSONResponse(
+        {
+            "record_id": record_id,
+            "record_type": record_type,
+            "record": record,
+            "chain": chain,
+            "panel": panel,
+        }
+    )

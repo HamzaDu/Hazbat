@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-# Adds any missing [app] settings to the config file. With the built-in database (START_LOCAL_DB) it also adds
-# the missing database settings and role passwords, and sets up the admin role. dbgen.py creates the other two roles.
+# Adds any missing [app] settings to the config file. With the built-in
+# database (START_LOCAL_DB) it also adds the missing database settings and
+# role passwords, and sets up the admin role. dbgen.py creates the other two
+# roles.
 #   python3 -m scripts.initconfig   (from /app)
 
 import os
@@ -27,7 +29,9 @@ def generate_password():
 
 
 def add_if_missing(config, section, name, value):
-    """Sets a setting only if it is not in the file yet. Returns True if it was added."""
+    """Sets a setting only if it is not in the file yet. Returns True if it
+    was added.
+    """
     if config.get(section, name) is not None:
         return False
     config.set(section, name, value)
@@ -35,7 +39,9 @@ def add_if_missing(config, section, name, value):
 
 
 def add_missing_database(config):
-    """Adds anything missing from the [database] section. Returns True if anything was added."""
+    """Adds anything missing from the [database] section. Returns True if
+    anything was added.
+    """
     added = False
     for name, value in (("host", "localhost"), ("port", "5432"), ("name", "bmac")):
         if add_if_missing(config, "database", name, value):
@@ -50,17 +56,24 @@ def add_missing_app(config):
     """Adds anything missing from the [app] section. Returns True if anything was added.
     The base URL is for testing only; replace it for any real use."""
     added = False
-    for name, value in (("base_url", "http://localhost:8000"), ("max_2fa_interval_hours", "48"),
-                        ("session_secret", generate_password()), ("two_factor_key", generate_password())):
+    for name, value in (
+        ("base_url", "http://localhost:8000"),
+        ("max_2fa_interval_hours", "48"),
+        ("session_secret", generate_password()),
+        ("two_factor_key", generate_password()),
+    ):
         if add_if_missing(config, "app", name, value):
             added = True
-    if truthy(os.getenv("NO_2FA")) and add_if_missing(config, "app", "disable_2fa", "true"):
+    if truthy(os.getenv("NO_2FA")) and add_if_missing(
+        config, "app", "disable_2fa", "true"
+    ):
         added = True
     return added
 
 
 def set_up_admin_role(password):
-    """Creates the admin role if it does not exist, and lets it create tables in the schema.
+    """Creates the admin role if it does not exist, and lets it create tables
+    in the schema.
     An existing role keeps its password."""
     role = "hazbat_admin"
     conn = psycopg2.connect(dbname="bmac", user="postgres", host="/run/postgresql")
@@ -68,9 +81,16 @@ def set_up_admin_role(password):
     try:
         cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,))
         if cur.fetchone() is None:
-            cur.execute(sql.SQL("CREATE ROLE {} LOGIN CREATEROLE PASSWORD %s").format(sql.Identifier(role)), (password,))
+            cur.execute(
+                sql.SQL("CREATE ROLE {} LOGIN CREATEROLE PASSWORD %s").format(
+                    sql.Identifier(role)
+                ),
+                (password,),
+            )
         cur.execute("REVOKE CREATE ON SCHEMA public FROM PUBLIC")
-        cur.execute(sql.SQL("GRANT ALL ON SCHEMA public TO {}").format(sql.Identifier(role)))
+        cur.execute(
+            sql.SQL("GRANT ALL ON SCHEMA public TO {}").format(sql.Identifier(role))
+        )
         conn.commit()
     finally:
         cur.close()
