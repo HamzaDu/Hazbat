@@ -20,20 +20,26 @@ signer = URLSafeTimedSerializer(SESSION_SECRET, salt="hazbat-2fa-device")
 
 
 def trust_cookie_name(user_id):
-    """Name of the cookie for one user, so people who share a browser do not overwrite each other's."""
+    """Name of the cookie for one user, so people who share a browser do not
+    overwrite each other's.
+    """
     return f"hazbat_2fa_{user_id}"
 
 
 def current_user(request: Request):
-    """The logged-in user's details: from the session, or from the API key require_login accepted."""
+    """The logged-in user's details: from the session, or from the API key
+    require_login accepted.
+    """
     if request.session.get("user_id"):
         return request.session
     return getattr(request.state, "user", {})
 
 
 def refresh_session(request: Request):
-    """Re-reads the logged-in user from the database, so a lock, a deletion or a change of role or projects
-    takes effect on the next request. Ends the session and returns False if the user is gone or locked."""
+    """Re-reads the logged-in user from the database, so a lock, a deletion or a
+    change of role or projects takes effect on the next request. Ends the
+    session and returns False if the user is gone or locked.
+    """
     state = get_session_state(request.session["user_id"])
     if state is None:
         request.session.clear()
@@ -45,8 +51,9 @@ def refresh_session(request: Request):
 
 
 def require_login(request: Request):
-    """Send the user to /login if they are not logged in (returns None when they are).
-    An API key in an Authorization: Bearer header also counts; an invalid one gets a 401."""
+    """Send the user to /login if they are not logged in (returns None when
+    they are). An API key in an Authorization: Bearer header also counts; an
+    invalid one gets a 401."""
     if request.session.get("user_id"):
         if refresh_session(request):
             return None
@@ -69,9 +76,11 @@ def require_session(request: Request):
 
 
 def device_trusted(request: Request, user_id):
-    """True if this browser holds a valid cookie from an earlier second-factor check for this user:
-    correctly signed, not older than the user's interval, and issued for their current authenticator.
-    An interval of zero means the second factor is asked for at every login."""
+    """True if this browser holds a valid cookie from an earlier second-factor
+    check for this user: correctly signed, not older than the user's interval,
+    and issued for their current authenticator. An interval of zero means the
+    second factor is asked for at every login.
+    """
     info = get_trust_info(user_id)
     if info is None or info[1] <= 0:
         return False
@@ -86,12 +95,20 @@ def device_trusted(request: Request, user_id):
 
 
 def trust_device(response, user_id):
-    """Puts the device cookie on a response after a successful second-factor check (nothing if the interval is zero)."""
+    """Puts the device cookie on a response after a successful second-factor
+    check (nothing if the interval is zero).
+    """
     info = get_trust_info(user_id)
     if info is None or info[1] <= 0:
         return
     value = signer.dumps({"user_id": user_id, "twofa_id": info[0]})
-    response.set_cookie(trust_cookie_name(user_id), value, max_age=info[1], httponly=True, samesite="lax")
+    response.set_cookie(
+        trust_cookie_name(user_id),
+        value,
+        max_age=info[1],
+        httponly=True,
+        samesite="lax",
+    )
 
 
 def complete_login(request: Request, user_id):

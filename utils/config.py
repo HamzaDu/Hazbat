@@ -1,17 +1,22 @@
-"""Reads and writes the config file (/etc/hazbat/hazbat.ini) without losing its comments.
+"""Reads and writes the config file (/etc/hazbat/hazbat.ini) without losing
+its comments.
 
-The whole file is loaded into a ConfigFile: the lines before the first section, then each section with its lines
-in order. Comment lines, blank lines and the order of everything are kept, so a file that has been edited by hand
+The whole file is loaded into a ConfigFile: the lines before the first section,
+then each section with its lines in order. Comment lines, blank lines and the
+order of everything are kept, so a file that has been edited by hand
 comes back out as it went in, apart from the settings that were set.
 
-The format is deliberately small, and anything outside it is an error that names the line:
+The format is deliberately small, and anything outside it is an error that
+names the line:
     # a comment      a line whose first character (after any spaces) is # or ;
     ; a comment
     [section]        a section header, on a line of its own
-    name = value     a setting: the name is everything before the first =, the value everything after it
+    name = value     a setting: the name is everything before the first =,
+                     the value everything after it
     (blank lines)
-Values are text. There are no quotes, no comments after a value (a # inside a value is part of the value), no
-continuation lines, and no repeated section or setting names. Settings must be inside a section.
+Values are text. There are no quotes, no comments after a value (a # inside a
+value is part of the value), no continuation lines, and no repeated section or
+setting names. Settings must be inside a section.
 """
 
 import os
@@ -72,25 +77,39 @@ class ConfigFile:
                     current.lines.append(Line(raw, kind))
             elif stripped[0] == "[":
                 if not stripped.endswith("]"):
-                    raise ConfigError(f"{label}: line {number}: section header has no closing ]: {raw!r}")
+                    raise ConfigError(
+                        f"{label}: line {number}: section header has no closing "
+                        f"]: {raw!r}"
+                    )
                 name = stripped[1:-1].strip()
                 check_section_name(name)
                 if config.find(name) is not None:
-                    raise ConfigError(f"{label}: line {number}: section [{name}] appears twice")
+                    raise ConfigError(
+                        f"{label}: line {number}: section [{name}] appears twice"
+                    )
                 current = Section(name, raw)
                 config.sections.append(current)
             else:
                 if "=" not in stripped:
-                    raise ConfigError(f"{label}: line {number}: not a comment, section or name = value: {raw!r}")
+                    raise ConfigError(
+                        f"{label}: line {number}: not a comment, section or "
+                        f"name = value: {raw!r}"
+                    )
                 if current is None:
-                    raise ConfigError(f"{label}: line {number}: setting is not inside a section: {raw!r}")
+                    raise ConfigError(
+                        f"{label}: line {number}: setting is not inside "
+                        f"a section: {raw!r}"
+                    )
                 name, value = stripped.split("=", 1)
                 name = name.strip()
                 value = value.strip()
                 check_name(name)
                 for line in current.lines:
                     if line.name == name:
-                        raise ConfigError(f"{label}: line {number}: [{current.name}] {name} appears twice")
+                        raise ConfigError(
+                            f"{label}: line {number}: [{current.name}] {name} "
+                            "appears twice"
+                        )
                 current.lines.append(Line(raw, "setting", name, value))
         return config
 
@@ -102,7 +121,9 @@ class ConfigFile:
         return None
 
     def get(self, section, name):
-        """The value of a setting, or None if the section or the setting is not there."""
+        """The value of a setting, or None if the section or the setting is not
+        there.
+        """
         found = self.find(section)
         if found is None:
             return None
@@ -123,8 +144,10 @@ class ConfigFile:
         return data
 
     def set(self, section, name, value):
-        """Sets a setting. An existing one keeps its place and the comments around it. A new one goes after the
-        section's last setting (or straight after its header), and a new section goes at the end of the file."""
+        """Sets a setting. An existing one keeps its place and the comments
+        around it. A new one goes after the section's last setting (or straight
+        after its header), and a new section goes at the end of the file.
+        """
         value = str(value)
         check_section_name(section)
         check_name(name)
@@ -164,8 +187,11 @@ class ConfigFile:
         return "\n".join(lines) + "\n"
 
     def save(self, path, mode, group):
-        """Writes the file through a temporary file, so a failure never leaves a half-written one.
-        mode is the permissions of the new file and group is the group that owns it."""
+        """
+        Writes the file through a temporary file, so a failure never leaves a
+        half-written one.
+        mode is the permissions of the new file and group is the group that owns it.
+        """
         os.makedirs(os.path.dirname(path), exist_ok=True)
         temporary = path + ".tmp"
         fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
@@ -183,8 +209,15 @@ def check_section_name(name):
 
 
 def check_name(name):
-    """Setting names must be non-empty, have no = or line breaks, and not look like a comment or a section."""
-    if name == "" or name[0] in "#;[" or any(character in name for character in "=\r\n"):
+    """
+    Setting names must be non-empty, have no = or line breaks,
+    and not look like a comment or a section.
+    """
+    if (
+        name == ""
+        or name[0] in "#;["
+        or any(character in name for character in "=\r\n")
+    ):
         raise ConfigError(f"Not a usable setting name: {name!r}")
 
 
@@ -195,5 +228,8 @@ def check_value(value):
 
 
 def truthy(value):
-    """True for the text true or 1 (in any case). Anything else, including None, is false."""
+    """
+    Returns True for the text true or 1 (in any case).
+    Anything else, including None, is false.
+    """
     return value is not None and value.strip().lower() in ("true", "1")

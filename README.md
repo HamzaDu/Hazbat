@@ -357,7 +357,7 @@ The schema creates the projects `LEAP`, `FAST` and `Shared`.
 - **Records** materials, coatings, SLP cells, coin cells, and MLP cells in a relational PostgreSQL database
 - **Enforces traceability** — every cell links back to its coating, every coating links back to its material
 - **Visualises** the full manufacturing graph interactively, with multi-dimensional filtering and path highlighting
-- **Generates lineage & passport cards** per cell, including EU Battery Regulation DPP scaffold fields 
+- **Generates lineage & passport cards** per cell, including EU Battery Regulation DPP scaffold fields
 - **Plots cycling data** from BioLogic `.mpr` files: capacity fade, coulombic efficiency, and voltage vs. capacity curves
 - **Exports** any table to CSV or Excel
 
@@ -368,7 +368,7 @@ The schema creates the projects `LEAP`, `FAST` and `Shared`.
 ```
 tbl_materials
     └── tbl_coating
-        └──tbl_cell 
+        └──tbl_cell
         e.g ├── tbl_slp        (single-layer pouch)
             ├── tbl_coincell   (coin cell, e.g. CR2032 half cell)
             ├── tbl_mlp        (multi-layer pouch — two coatings: cathode + anode)

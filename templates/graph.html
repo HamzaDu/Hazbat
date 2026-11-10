@@ -18,7 +18,7 @@
                   style="font-size: 12px; color: #2e5fa3; cursor: pointer; display: none;">
                 Clear all
             </span>
-        </div> 
+        </div>
 
         <!-- NODE TYPE  -->
         <div class="fs-wrap">
@@ -28,7 +28,7 @@
             <div id="sec-nodeType"></div>
         </div>
         <hr class="fs-sep">
-        
+
         <!-- PROJECT -->
         <div class="fs-wrap">
             <div class="fs-head" onclick="toggleSection('project')">
@@ -65,7 +65,7 @@
         </div>
 
     </div>
-    
+
     <!-- --- Graph canvas --- -->
     <div class="graph-wrap" style="flex: 1; min-width: 0; position: relative;">
         <div id="network" style="width: 100%; height: 700px; background: #0a0e1a; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);"></div>
@@ -232,7 +232,7 @@ const FS = {
 // null = all nodes pass (no project filter active).
 let projectVisibleNodes = null;
 
-    
+
 // --- functions ---
 function rgba(hex, opacity) {
     const value = parseInt(hex.slice(1), 16);
@@ -256,7 +256,7 @@ function toggleSection(name) {
     sec.style.display = hide ? 'none' : '';
     chev.classList.toggle('up', hide);
 }
-    
+
 // --- Path finding ---
     function findAncestors(targetId, edges) {
         // Walk backwards (child -> parent) through EVERY parent, not just the first.
@@ -281,7 +281,7 @@ function toggleSection(name) {
                 }
             });
         };
-    
+
         return ancestors;
     }
     function findDescendants(startId, edges) {
@@ -364,7 +364,7 @@ function toggleSection(name) {
         });
     }
 
-    // --- Node visibility ---    
+    // --- Node visibility ---
     function isNodeVisible(node) {
     // 1. Node-type (group) filter
     if (!activeGroups.has(node.group)) return false;
@@ -447,7 +447,7 @@ function toggleSection(name) {
     updateClearButton();
     }
 
-    
+
 
     // --- Clear button ---
     function isAnyFilterActive() {
@@ -788,7 +788,7 @@ function resetFilters() {
 }
 
 
-// --- Zoom --- 
+// --- Zoom ---
     function onZoom(params) {
         currentScale = params.scale;
         applyNodeStyles(currentSelectedPath);
@@ -802,7 +802,7 @@ function resetFilters() {
         applyNodeStyles(null);
     }
 
-// --- The traceability graph 
+// --- The traceability graph
     Promise.all([
         fetch('/api/graph').then(r => r.json()),
         fetch('/api/filters').then(r => r.json())
@@ -812,10 +812,10 @@ function resetFilters() {
         buildFilterUI(filterData);
         buildProjectFilters(graphData.nodes.filter(n => n.group === 'project'));
         buildNodeTypeFilter();
-            
+
             nodesDS = new vis.DataSet(graphData.nodes.map(n => ({
                 ...n,
-                level:        groupLevels[n.group],  
+                level:        groupLevels[n.group],
                 label:        shortLabel(n.id, n.group),
                 title:        n.id + (n.title ? ' — ' + n.title : ''),
                 shape:        'dot',
@@ -835,8 +835,8 @@ function resetFilters() {
             })));
 
             network = new vis.Network(
-                document.getElementById('network'), 
-                { nodes: nodesDS, edges: edgesDS }, 
+                document.getElementById('network'),
+                { nodes: nodesDS, edges: edgesDS },
                 {
                     layout:      { hierarchical: { direction: 'UD', sortMethod: 'hubsize', levelSeparation: 130, nodeSpacing: 55 } },
                     physics:     { hierarchicalRepulsion: { nodeDistance: 85 } },
@@ -848,10 +848,10 @@ function resetFilters() {
                 network.setOptions({ physics: false });
                 network.storePositions(); // ← writes x/y into nodesDS
             });
-            
+
             network.on('zoom', onZoom);
 
-            
+
 
             // ---Click handler---
             network.on("click", async function(params) {
@@ -880,7 +880,7 @@ function resetFilters() {
                 // Dim every node not in the set; highlight those that are — ONE redraw.
                 applyNodeStyles(selectedPath);
                 resetEdgeStyles();  // reset all edges to default color/width
-           
+
             // Pulsing animation along the path edges
                 let bright = false;
                 pulseInterval = setInterval(() => {

@@ -1,5 +1,6 @@
 from core.db import get_connection
 
+
 def test_database_connection():
     conn = get_connection(read_only=True)
     cur = conn.cursor()

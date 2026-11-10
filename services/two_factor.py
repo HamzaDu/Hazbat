@@ -1,4 +1,5 @@
-"""Two-factor authentication: authenticators (TOTP), recovery codes and the time between checks.
+"""Two-factor authentication: authenticators (TOTP), recovery codes and the
+time between checks.
 
 Tables: tbl_user_2fa and tbl_user_recovery_codes, and twofa_interval in tbl_users.
 """
@@ -19,7 +20,9 @@ from core.varreg import settings
 
 
 def two_factor_cipher():
-    """AES-256-CBC, with the key and the fixed IV derived from the two_factor_key setting."""
+    """AES-256-CBC, with the key and the fixed IV derived from the
+    two_factor_key setting.
+    """
     settings.require("app", "two_factor_key")
     secret = settings.get("app", "two_factor_key").encode()
     key = hashlib.sha256(b"key" + secret).digest()
@@ -63,7 +66,11 @@ def has_confirmed_2fa(user_id):
     conn = get_admin_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT EXISTS (SELECT 1 FROM tbl_user_2fa WHERE user_id = %s AND confirmed_at IS NOT NULL)", (user_id,))
+        cur.execute(
+            "SELECT EXISTS (SELECT 1 FROM tbl_user_2fa "
+            "WHERE user_id = %s AND confirmed_at IS NOT NULL)",
+            (user_id,),
+        )
         return cur.fetchone()[0]
     finally:
         cur.close()
@@ -71,7 +78,9 @@ def has_confirmed_2fa(user_id):
 
 
 def start_totp_enrolment(user_id, username):
-    """Replaces any unconfirmed authenticator and unused recovery codes with new ones. Returns (secret, uri, codes)."""
+    """Replaces any unconfirmed authenticator and unused recovery codes with
+    new ones. Returns (secret, uri, codes).
+    """
     secret = pyotp.random_base32()
     uri = pyotp.TOTP(secret).provisioning_uri(name=username, issuer_name="BMAC")
     codes = []
@@ -81,15 +90,26 @@ def start_totp_enrolment(user_id, username):
     conn = get_admin_connection()
     cur = conn.cursor()
     try:
-        cur.execute("DELETE FROM tbl_user_2fa WHERE user_id = %s AND confirmed_at IS NULL", (user_id,))
-        cur.execute("DELETE FROM tbl_user_recovery_codes WHERE user_id = %s AND used_at IS NULL", (user_id,))
         cur.execute(
-            "INSERT INTO tbl_user_2fa (user_id, method, name, data) VALUES (%s, 'totp', 'Authenticator', %s)",
-            (user_id, json.dumps({"secret": encrypt_secret(secret), "last_step": 0}))
+            "DELETE FROM tbl_user_2fa WHERE user_id = %s AND confirmed_at IS NULL",
+            (user_id,),
+        )
+        cur.execute(
+            "DELETE FROM tbl_user_recovery_codes "
+            "WHERE user_id = %s AND used_at IS NULL",
+            (user_id,),
+        )
+        cur.execute(
+            "INSERT INTO tbl_user_2fa (user_id, method, name, data) "
+            "VALUES (%s, 'totp', 'Authenticator', %s)",
+            (user_id, json.dumps({"secret": encrypt_secret(secret), "last_step": 0})),
         )
         for code in codes:
-            cur.execute("INSERT INTO tbl_user_recovery_codes (user_id, code_hash) VALUES (%s, %s)",
-                        (user_id, hash_recovery_code(code)))
+            cur.execute(
+                "INSERT INTO tbl_user_recovery_codes (user_id, code_hash) "
+                "VALUES (%s, %s)",
+                (user_id, hash_recovery_code(code)),
+            )
         conn.commit()
     finally:
         cur.close()
@@ -102,23 +122,35 @@ def get_pending_totp(user_id, username):
     conn = get_admin_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT data FROM tbl_user_2fa WHERE user_id = %s AND method = 'totp' AND confirmed_at IS NULL", (user_id,))
+        cur.execute(
+            "SELECT data FROM tbl_user_2fa "
+            "WHERE user_id = %s AND method = 'totp' AND confirmed_at IS NULL",
+            (user_id,),
+        )
         row = cur.fetchone()
         if not row:
             return None
         secret = decrypt_secret(row[0]["secret"])
-        return secret, pyotp.TOTP(secret).provisioning_uri(name=username, issuer_name="BMAC")
+        return secret, pyotp.TOTP(secret).provisioning_uri(
+            name=username, issuer_name="BMAC"
+        )
     finally:
         cur.close()
         conn.close()
 
 
 def confirm_totp(user_id, code):
-    """Confirms the user's pending authenticator if the code is right. Returns True if it was confirmed."""
+    """Confirms the user's pending authenticator if the code is right. Returns
+    True if it was confirmed.
+    """
     conn = get_admin_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT id, data FROM tbl_user_2fa WHERE user_id = %s AND method = 'totp' AND confirmed_at IS NULL", (user_id,))
+        cur.execute(
+            "SELECT id, data FROM tbl_user_2fa "
+            "WHERE user_id = %s AND method = 'totp' AND confirmed_at IS NULL",
+            (user_id,),
+        )
         row = cur.fetchone()
         if not row:
             return False
@@ -128,7 +160,7 @@ def confirm_totp(user_id, code):
         cur.execute(
             "UPDATE tbl_user_2fa SET confirmed_at = now(), last_used_at = now(), "
             "data = jsonb_set(data, '{last_step}', to_jsonb(%s::int)) WHERE id = %s",
-            (step, row[0])
+            (step, row[0]),
         )
         conn.commit()
         return True
@@ -138,16 +170,20 @@ def confirm_totp(user_id, code):
 
 
 def get_trust_info(user_id):
-    """(ID of the user's newest confirmed second-factor record, their interval in seconds),
-    or None if the user has no confirmed second factor. A device cookie is valid for as long as the interval,
-    and only while that record is the one it was issued for, so resetting two-factor cancels every cookie."""
+    """(ID of the user's newest confirmed second-factor record, their interval
+    in seconds), or None if the user has no confirmed second factor. A device
+    cookie is valid for as long as the interval, and only while that record is
+    the one it was issued for, so resetting two-factor cancels every cookie.
+    """
     conn = get_admin_connection()
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT (SELECT MAX(id) FROM tbl_user_2fa WHERE user_id = u.user_id AND confirmed_at IS NOT NULL), "
-            "EXTRACT(EPOCH FROM u.twofa_interval) FROM tbl_users u WHERE u.user_id = %s",
-            (user_id,)
+            "SELECT (SELECT MAX(id) FROM tbl_user_2fa "
+            "WHERE user_id = u.user_id AND confirmed_at IS NOT NULL), "
+            "EXTRACT(EPOCH FROM u.twofa_interval) FROM tbl_users u "
+            "WHERE u.user_id = %s",
+            (user_id,),
         )
         row = cur.fetchone()
         if row is None or row[0] is None:
@@ -159,11 +195,16 @@ def get_trust_info(user_id):
 
 
 def set_2fa_interval(user_id, interval):
-    """Sets how long a successful check lasts, as a timedelta. A zero interval means a check at every login."""
+    """Sets how long a successful check lasts, as a timedelta. A zero interval
+    means a check at every login.
+    """
     conn = get_admin_connection()
     cur = conn.cursor()
     try:
-        cur.execute("UPDATE tbl_users SET twofa_interval = %s WHERE user_id = %s", (interval, user_id))
+        cur.execute(
+            "UPDATE tbl_users SET twofa_interval = %s WHERE user_id = %s",
+            (interval, user_id),
+        )
         conn.commit()
     finally:
         cur.close()
@@ -171,12 +212,16 @@ def set_2fa_interval(user_id, interval):
 
 
 def reset_2fa(user_id):
-    """Removes the user's authenticators and recovery codes; they enrol again at their next login."""
+    """Removes the user's authenticators and recovery codes; they enrol again
+    at their next login.
+    """
     conn = get_admin_connection()
     cur = conn.cursor()
     try:
         cur.execute("DELETE FROM tbl_user_2fa WHERE user_id = %s", (user_id,))
-        cur.execute("DELETE FROM tbl_user_recovery_codes WHERE user_id = %s", (user_id,))
+        cur.execute(
+            "DELETE FROM tbl_user_recovery_codes WHERE user_id = %s", (user_id,)
+        )
         conn.commit()
     finally:
         cur.close()
@@ -184,24 +229,33 @@ def reset_2fa(user_id):
 
 
 def verify_totp(cur, row_id, data, code):
-    """True if the code is valid and newer than the last one used. Records its time step."""
+    """True if the code is valid and newer than the last one used. Records its
+    time step.
+    """
     step = totp_step(decrypt_secret(data["secret"]), code)
     if step is None or step <= data["last_step"]:
         return False
     cur.execute(
-        "UPDATE tbl_user_2fa SET last_used_at = now(), data = jsonb_set(data, '{last_step}', to_jsonb(%s::int)) WHERE id = %s",
-        (step, row_id)
+        "UPDATE tbl_user_2fa SET last_used_at = now(), "
+        "data = jsonb_set(data, '{last_step}', to_jsonb(%s::int)) WHERE id = %s",
+        (step, row_id),
     )
     return True
 
 
 def verify_second_factor(user_id, code):
-    """True if the code is valid for one of the user's confirmed methods, or is an unused recovery code."""
+    """True if the code is valid for one of the user's confirmed methods, or
+    is an unused recovery code.
+    """
     verifiers = {"totp": verify_totp}
     conn = get_admin_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT id, method, data FROM tbl_user_2fa WHERE user_id = %s AND confirmed_at IS NOT NULL", (user_id,))
+        cur.execute(
+            "SELECT id, method, data FROM tbl_user_2fa "
+            "WHERE user_id = %s AND confirmed_at IS NOT NULL",
+            (user_id,),
+        )
         for row_id, method, data in cur.fetchall():
             if method in verifiers and verifiers[method](cur, row_id, data, code):
                 conn.commit()
@@ -209,7 +263,7 @@ def verify_second_factor(user_id, code):
         cur.execute(
             "UPDATE tbl_user_recovery_codes SET used_at = now() "
             "WHERE user_id = %s AND code_hash = %s AND used_at IS NULL RETURNING id",
-            (user_id, hash_recovery_code(code))
+            (user_id, hash_recovery_code(code)),
         )
         used = cur.fetchone() is not None
         conn.commit()

@@ -46,8 +46,13 @@ Rules of thumb:
   non-obvious.
 
 ## Before opening a pull request
+1. Run pre-commit checks. Some issues are fixed automatically. Fix any issues flagged that were not fixed automatically.
+   ```bash
+   pip install -r requirements-dev.txt
+   pre-commit run --all-files
+   ```
 
-1. Run the smoke test against your dev database:
+2. Run the smoke test against your dev database:
    ```bash
    pip install -r requirements-dev.txt
    pytest -q

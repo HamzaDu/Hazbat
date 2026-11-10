@@ -11,37 +11,84 @@ from datetime import datetime
 
 import pandas as pd
 
-from services.forms import clean_optional_fields, coating_electrode, insert_record, record_exists
+from services.forms import (
+    clean_optional_fields,
+    coating_electrode,
+    insert_record,
+    record_exists,
+)
 from services.records import project_visible
 
-
-# Cells that mean "no data". Stored as NULL in the database and shown as "—" on every page.
+# Cells that mean "no data". Stored as NULL in the database and shown as "—"
+# on every page.
 BLANK_MARKERS = {"", "nan", "nat", "none", "null", "n/a", "na", "-", "—", "–"}
-DATE_FORMATS = ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y", "%d/%m/%y", "%d-%m-%Y", "%d.%m.%Y")
+DATE_FORMATS = (
+    "%Y-%m-%d",
+    "%Y-%m-%d %H:%M:%S",
+    "%d/%m/%Y",
+    "%d/%m/%y",
+    "%d-%m-%Y",
+    "%d.%m.%Y",
+)
 
 # Required + optional columns for each table's bulk upload. "aliases" lets older
 # spreadsheets keep working (e.g. a "GSM" column on the coatings sheet).
 BULK_SPECS = {
-    "tbl_materials": {"id": "material_id", "required": ["material_id", "chemistry", "supplier"],
-                      "numeric": ["quantity_kg"], "dates": ["date_received"],
-                      "text": ["location", "availability", "notes"], "aliases": {}},
-    "tbl_coating":   {"id": "coating_id", "required": ["coating_id", "material_id", "project", "made_by"],
-                      "numeric": ["coat_weight_gsm", "porosity"], "dates": ["coating_date"],
-                      "text": ["notes"], "aliases": {"gsm": "coat_weight_gsm", "coat_weight": "coat_weight_gsm", "coat_weight_g_m": "coat_weight_gsm", "gsm_g_m": "coat_weight_gsm"}},
-    "tbl_slp":       {"id": "slp_id", "required": ["slp_id", "coating_id", "project", "made_by"],
-                      "numeric": ["formation_capacity", "np_ratio"], "dates": ["date_made"],
-                      "text": ["electrolyte", "notes"], "aliases": {"n_p_ratio": "np_ratio", "formation_capacity_mah": "formation_capacity"}},
-    "tbl_coincell":  {"id": "coincell_id", "required": ["coincell_id", "coating_id", "project", "made_by"],
-                      "numeric": ["formation_capacity", "gsm"], "dates": ["date_made"],
-                      "text": ["electrolyte", "cell_type", "notes"], "aliases": {"gsm_g_m": "gsm", "formation_capacity_mah": "formation_capacity"}},
-    "tbl_mlp":       {"id": "mlp_id", "required": ["mlp_id", "cat_coating_id", "an_coating_id", "project"],
-                      "numeric": ["cell_capacity", "ac_area_ratio"], "dates": ["date_made"],
-                      "text": ["electrolyte"], "aliases": {"a_c_area_ratio": "ac_area_ratio"}},
+    "tbl_materials": {
+        "id": "material_id",
+        "required": ["material_id", "chemistry", "supplier"],
+        "numeric": ["quantity_kg"],
+        "dates": ["date_received"],
+        "text": ["location", "availability", "notes"],
+        "aliases": {},
+    },
+    "tbl_coating": {
+        "id": "coating_id",
+        "required": ["coating_id", "material_id", "project", "made_by"],
+        "numeric": ["coat_weight_gsm", "porosity"],
+        "dates": ["coating_date"],
+        "text": ["notes"],
+        "aliases": {
+            "gsm": "coat_weight_gsm",
+            "coat_weight": "coat_weight_gsm",
+            "coat_weight_g_m": "coat_weight_gsm",
+            "gsm_g_m": "coat_weight_gsm",
+        },
+    },
+    "tbl_slp": {
+        "id": "slp_id",
+        "required": ["slp_id", "coating_id", "project", "made_by"],
+        "numeric": ["formation_capacity", "np_ratio"],
+        "dates": ["date_made"],
+        "text": ["electrolyte", "notes"],
+        "aliases": {
+            "n_p_ratio": "np_ratio",
+            "formation_capacity_mah": "formation_capacity",
+        },
+    },
+    "tbl_coincell": {
+        "id": "coincell_id",
+        "required": ["coincell_id", "coating_id", "project", "made_by"],
+        "numeric": ["formation_capacity", "gsm"],
+        "dates": ["date_made"],
+        "text": ["electrolyte", "cell_type", "notes"],
+        "aliases": {"gsm_g_m": "gsm", "formation_capacity_mah": "formation_capacity"},
+    },
+    "tbl_mlp": {
+        "id": "mlp_id",
+        "required": ["mlp_id", "cat_coating_id", "an_coating_id", "project"],
+        "numeric": ["cell_capacity", "ac_area_ratio"],
+        "dates": ["date_made"],
+        "text": ["electrolyte"],
+        "aliases": {"a_c_area_ratio": "ac_area_ratio"},
+    },
 }
 
 
 def normalise_header(name) -> str:
-    """'Material ID ' / 'material-id' / 'Quantity (kg)' -> 'material_id' / 'material_id' / 'quantity_kg'."""
+    """'Material ID ' / 'material-id' / 'Quantity (kg)' -> 'material_id' /
+    'material_id' / 'quantity_kg'.
+    """
     return re.sub(r"[^a-z0-9]+", "_", str(name).strip().lower()).strip("_")
 
 
@@ -64,7 +111,9 @@ def parse_date(value: str) -> str:
 
 
 def read_upload(contents: bytes, filename: str):
-    """Read a CSV/Excel upload as text so nothing is silently converted. Returns a list of row dicts."""
+    """Read a CSV/Excel upload as text so nothing is silently converted.
+    Returns a list of row dicts.
+    """
     buffer = io.BytesIO(contents)
     if filename.lower().endswith(".csv"):
         df = pd.read_csv(buffer, dtype=str, keep_default_na=False)
@@ -74,9 +123,12 @@ def read_upload(contents: bytes, filename: str):
 
 
 def process_bulk_upload(rows, table: str, allowed, check=None):
-    """Validate and insert each row. A row for a project the user may not use fails (allowed is None for admins).
+    """Validate and insert each row. A row for a project the user may not use
+    fails (allowed is None for admins).
     check(values) may return an error message for a row.
-    Returns {"success": [...ids], "failed": [{"row", "reason"}], "ignored": [...unknown columns]}."""
+    Returns {"success": [...ids], "failed": [{"row", "reason"}],
+    "ignored": [...unknown columns]}.
+    """
     spec = BULK_SPECS[table]
     known = spec["required"] + spec["numeric"] + spec["dates"] + spec["text"]
     success, failed, ignored = [], [], set()
@@ -97,16 +149,32 @@ def process_bulk_upload(rows, table: str, allowed, check=None):
 
         missing = [k for k in spec["required"] if not values.get(k)]
         if missing:
-            failed.append({"row": row_num, "reason": f"Missing required field(s): {', '.join(missing)}."})
+            failed.append(
+                {
+                    "row": row_num,
+                    "reason": f"Missing required field(s): {', '.join(missing)}.",
+                }
+            )
             continue
 
-        if "project" in spec["required"] and not project_visible(values["project"], allowed):
-            failed.append({"row": row_num, "reason": f"You don't have access to project '{values['project']}'."})
+        if "project" in spec["required"] and not project_visible(
+            values["project"], allowed
+        ):
+            failed.append(
+                {
+                    "row": row_num,
+                    "reason": (
+                        f"You don't have access to project '{values['project']}'."
+                    ),
+                }
+            )
             continue
 
         record_id = values[spec["id"]]
         if record_id != record_id.upper():
-            failed.append({"row": row_num, "reason": f"'{record_id}' is not uppercase."})
+            failed.append(
+                {"row": row_num, "reason": f"'{record_id}' is not uppercase."}
+            )
             continue
 
         error = check(values) if check else None
@@ -122,13 +190,19 @@ def process_bulk_upload(rows, table: str, allowed, check=None):
             failed.append({"row": row_num, "reason": str(e)})
             continue
 
-        optional = {k: values.get(k) for k in spec["numeric"] + spec["dates"] + spec["text"]}
-        extras, error = clean_optional_fields(optional, numeric_fields=set(spec["numeric"]))
+        optional = {
+            k: values.get(k) for k in spec["numeric"] + spec["dates"] + spec["text"]
+        }
+        extras, error = clean_optional_fields(
+            optional, numeric_fields=set(spec["numeric"])
+        )
         if error:
             failed.append({"row": row_num, "reason": error})
             continue
 
-        error = insert_record(table, {**{k: values[k] for k in spec["required"]}, **extras})
+        error = insert_record(
+            table, {**{k: values[k] for k in spec["required"]}, **extras}
+        )
         if error:
             failed.append({"row": row_num, "reason": error})
         else:
@@ -156,7 +230,9 @@ def check_cell_row(v):
 
 
 def check_mlp_row(v):
-    """Bulk upload check: an MLP needs an existing cathode and an existing anode coating."""
+    """Bulk upload check: an MLP needs an existing cathode and an existing
+    anode coating.
+    """
     if coating_electrode(v["cat_coating_id"]) != "cathode":
         return f"{v['cat_coating_id']} isn't an existing cathode (CAT-) coating."
     if coating_electrode(v["an_coating_id"]) != "anode":

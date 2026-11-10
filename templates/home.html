@@ -270,7 +270,7 @@
                 font: { color: '#e8e8f0', size: n.group === 'project' ? 12 : 10, bold: n.group === 'project' },
                 shadow: { enabled: true, color: groupColors[n.group].background, size: 8, x: 0, y: 0 }
             })));
-            
+
             const edges = new vis.DataSet(data.edges.map(e => ({
                 ...e,
                 color: { color: 'rgba(120,140,200,0.35)', highlight: '#00e5ff' },

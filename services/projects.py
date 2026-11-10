@@ -1,6 +1,7 @@
 """Projects: listing them, creating one, and switching one on or off.
 
-Tables: tbl_projects, and the record tables and tbl_user_projects for the counts shown beside each project.
+Tables: tbl_projects, and the record tables and tbl_user_projects for the
+counts shown beside each project.
 """
 
 import re
@@ -27,8 +28,11 @@ PROJECT_COLUMNS = ["name", "active", "records", "users"]
 def check_project_name(name):
     """An error message if the name cannot be used, otherwise None."""
     if not NAME_PATTERN.fullmatch(name):
-        return ("A project name must start with a letter or a digit, use only letters, digits, spaces, dots, "
-                "hyphens and underscores, and be at most 60 characters long.")
+        return (
+            "A project name must start with a letter or a digit, use only "
+            "letters, digits, spaces, dots, "
+            "hyphens and underscores, and be at most 60 characters long."
+        )
     return None
 
 
@@ -38,14 +42,16 @@ def list_projects():
     cur = conn.cursor()
     try:
         cur.execute(PROJECT_QUERY + " ORDER BY lower(p.project_name)")
-        return [dict(zip(PROJECT_COLUMNS, row)) for row in cur.fetchall()]
+        return [dict(zip(PROJECT_COLUMNS, row, strict=True)) for row in cur.fetchall()]
     finally:
         cur.close()
         conn.close()
 
 
 def get_project(name):
-    """One project as {name, active, records, users}, or None if there is no such project."""
+    """One project as {name, active, records, users}, or None if there is no
+    such project.
+    """
     conn = get_admin_connection()
     cur = conn.cursor()
     try:
@@ -53,7 +59,7 @@ def get_project(name):
         row = cur.fetchone()
         if row is None:
             return None
-        return dict(zip(PROJECT_COLUMNS, row))
+        return dict(zip(PROJECT_COLUMNS, row, strict=True))
     finally:
         cur.close()
         conn.close()
@@ -65,14 +71,21 @@ def create_project(name):
     error = check_project_name(name)
     if error:
         return error
-    exists = "A project with that name already exists (names are compared ignoring capitals)."
+    exists = (
+        "A project with that name already exists "
+        "(names are compared ignoring capitals)."
+    )
     conn = get_admin_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT 1 FROM tbl_projects WHERE lower(project_name) = lower(%s)", (name,))
+        cur.execute(
+            "SELECT 1 FROM tbl_projects WHERE lower(project_name) = lower(%s)", (name,)
+        )
         if cur.fetchone() is not None:
             return exists
-        cur.execute("INSERT INTO tbl_projects (project_name, active) VALUES (%s, TRUE)", (name,))
+        cur.execute(
+            "INSERT INTO tbl_projects (project_name, active) VALUES (%s, TRUE)", (name,)
+        )
         conn.commit()
         return None
     except psycopg2.errors.UniqueViolation:
@@ -88,7 +101,11 @@ def set_project_active(name, active):
     conn = get_admin_connection()
     cur = conn.cursor()
     try:
-        cur.execute("UPDATE tbl_projects SET active = %s WHERE project_name = %s RETURNING project_name", (active, name))
+        cur.execute(
+            "UPDATE tbl_projects SET active = %s WHERE project_name = %s "
+            "RETURNING project_name",
+            (active, name),
+        )
         found = cur.fetchone() is not None
         conn.commit()
         return found

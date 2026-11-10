@@ -7,7 +7,6 @@ Values not recorded yet stay None and show as "—".
 
 from services.cards import fetch_card_record
 
-
 # Process energy is not recorded yet, so it stays None (shown as "—") until
 # process-step data is added to the database. Cost and carbon are deliberately
 # not part of the passport: they need a proper study, not a rough estimate.
@@ -40,30 +39,60 @@ def electrode_role(material_id: str) -> str:
 def coating_with_material(cur, coating_id: str):
     """One branch of the lineage: the coating and the material it was made from."""
     cur.execute(
-        "SELECT material_id, project, coating_date, made_by, coat_weight_gsm, porosity, notes "
-        "FROM tbl_coating WHERE coating_id = %s", (coating_id,)
+        "SELECT material_id, project, coating_date, made_by, "
+        "coat_weight_gsm, porosity, notes "
+        "FROM tbl_coating WHERE coating_id = %s",
+        (coating_id,),
     )
     row = cur.fetchone()
-    keys = ["material_id", "project", "coating_date", "made_by", "coat_weight_gsm", "porosity", "notes"]
-    coating = {"id": coating_id, **(dict(zip(keys, row)) if row else {k: None for k in keys})}
+    keys = [
+        "material_id",
+        "project",
+        "coating_date",
+        "made_by",
+        "coat_weight_gsm",
+        "porosity",
+        "notes",
+    ]
+    coating = {
+        "id": coating_id,
+        **(dict(zip(keys, row, strict=True)) if row else {k: None for k in keys}),
+    }
 
     material = None
     if coating["material_id"]:
         cur.execute(
-            "SELECT chemistry, supplier, date_received, quantity_kg, location, availability "
-            "FROM tbl_materials WHERE material_id = %s", (coating["material_id"],)
+            "SELECT chemistry, supplier, date_received, quantity_kg, "
+            "location, availability "
+            "FROM tbl_materials WHERE material_id = %s",
+            (coating["material_id"],),
         )
         row = cur.fetchone()
-        keys = ["chemistry", "supplier", "date_received", "quantity_kg", "location", "availability"]
-        material = {"id": coating["material_id"], **(dict(zip(keys, row)) if row else {k: None for k in keys}),
-                    "recycled_content": None}
+        keys = [
+            "chemistry",
+            "supplier",
+            "date_received",
+            "quantity_kg",
+            "location",
+            "availability",
+        ]
+        material = {
+            "id": coating["material_id"],
+            **(dict(zip(keys, row, strict=True)) if row else {k: None for k in keys}),
+            "recycled_content": None,
+        }
 
     return {
         "role": electrode_role(coating["material_id"] or coating_id),
         "material": material,
-        "process": {"name": "Electrode manufacture", "steps": "Mix → Coat → Dry → Calender",
-                    "date": coating["coating_date"], "operator": coating["made_by"], "location": None,
-                    **EMPTY_PROCESS_METRICS},
+        "process": {
+            "name": "Electrode manufacture",
+            "steps": "Mix → Coat → Dry → Calender",
+            "date": coating["coating_date"],
+            "operator": coating["made_by"],
+            "location": None,
+            **EMPTY_PROCESS_METRICS,
+        },
         "coating": coating,
     }
 
@@ -82,12 +111,19 @@ def build_lineage(cur, record_type: str, record_id: str):
 
     cur.execute(
         "SELECT filename, num_cycles, uploaded_at FROM tbl_cycling_data "
-        "WHERE record_id = %s ORDER BY uploaded_at DESC LIMIT 1", (record_id,)
+        "WHERE record_id = %s ORDER BY uploaded_at DESC LIMIT 1",
+        (record_id,),
     )
     row = cur.fetchone()
-    cycling = {"filename": row[0], "half_cycles": row[1], "uploaded_at": row[2]} if row else None
+    cycling = (
+        {"filename": row[0], "half_cycles": row[1], "uploaded_at": row[2]}
+        if row
+        else None
+    )
 
-    chemistry = " ‖ ".join((b["material"] or {}).get("chemistry") or "?" for b in branches)
+    chemistry = " ‖ ".join(
+        (b["material"] or {}).get("chemistry") or "?" for b in branches
+    )
     suppliers = [(b["material"] or {}).get("supplier") for b in branches]
     capacity = record.get("Cell Capacity") or record.get("Formation Capacity")
 
@@ -98,10 +134,19 @@ def build_lineage(cur, record_type: str, record_id: str):
         "record": record,
         "chain": chain,
         "branches": branches,
-        "assembly": {"name": "Cell assembly", "date": record.get("Date Made"), "operator": record.get("Made By"),
-                     "location": None, "inputs": {"electrolyte": record.get("Electrolyte")}, **EMPTY_PROCESS_METRICS},
-        "formation": {"name": "Formation", "formation_capacity": record.get("Formation Capacity"),
-                      **EMPTY_PROCESS_METRICS},
+        "assembly": {
+            "name": "Cell assembly",
+            "date": record.get("Date Made"),
+            "operator": record.get("Made By"),
+            "location": None,
+            "inputs": {"electrolyte": record.get("Electrolyte")},
+            **EMPTY_PROCESS_METRICS,
+        },
+        "formation": {
+            "name": "Formation",
+            "formation_capacity": record.get("Formation Capacity"),
+            **EMPTY_PROCESS_METRICS,
+        },
         "usage": {"type": "Testing" if cycling else None, "cycling": cycling},
         "end_of_life": {"route": None, "recycler": None, "second_life_eligible": None},
         "totals": {"energy_kwh": None},
