@@ -65,6 +65,7 @@ jobs:
           base_url = http://localhost:8000
           session_secret = ci-session-secret
           two_factor_key = ci-two-factor-key
+          max_2fa_interval_hours = 48
           disable_2fa = true
           EOF
           python3 -m scripts.dbgen
