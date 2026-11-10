@@ -1,0 +1,72 @@
+name: Pull Request
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+      - name: Install pre-commit
+        run: pip install pre-commit
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files
+
+  tests:
+    needs: style
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: hazbat_admin
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: bmac
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          until pg_isready -h localhost -p 5432 -U hazbat_admin; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+      - name: Set up database
+        run: |
+          sudo install -d /etc/hazbat
+          sudo tee /etc/hazbat/hazbat.ini > /dev/null <<'EOF'
+          [database]
+          host = localhost
+          port = 5432
+          name = bmac
+          admin_password = password
+          read_write_password = ci-read-write-password
+          read_only_password = ci-read-only-password
+
+          [app]
+          base_url = http://localhost:8000
+          session_secret = ci-session-secret
+          two_factor_key = ci-two-factor-key
+          disable_2fa = true
+          EOF
+          python3 -m scripts.dbgen
+      - name: Run tests
+        run: pytest -v
