@@ -1,21 +1,24 @@
-"""Synthesis steps of a material, as JSON.
+"""Synthesis steps of a material: the page, and the JSON it uses.
 
+GET    /materials/{id}/synthesis       the page (synthesis.html, js/synthesis.js)
 GET    /api/materials/{id}/synthesis   every step, in order
 POST   /api/materials/{id}/synthesis   add a step (JSON body; no step_no = last + 1)
 PUT    /api/synthesis/{step_id}        replace a step's values
 DELETE /api/synthesis/{step_id}        remove a step
 
-Checks and database work are in services/synthesis.py. Only the GET is an MCP tool.
+Checks and database work are in services/synthesis.py. Only GET /api/... is an MCP tool.
 """
 
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
-from core.auth import get_allowed_projects, require_login
+from core.auth import current_user, get_allowed_projects, require_login
+from core.templates import templates
+from services.coa import material_summaries
 from services.forms import record_exists
-from services.records import record_visible
+from services.records import detect_record_type, record_visible
 from services.synthesis import (
     STEP_TYPES,
     SynthesisError,
@@ -48,6 +51,29 @@ def step_found(request: Request, step_id: int):
 
 def not_found(what: str):
     return JSONResponse({"error": f"{what} not found"}, status_code=404)
+
+
+@router.get("/materials/{material_id}/synthesis", response_class=HTMLResponse)
+def synthesis_page(request: Request, material_id: str):
+    """A material's synthesis route: the steps in order, and a form to add or
+    edit one. The steps are loaded by static/js/synthesis.js.
+    """
+    redirect = require_login(request)
+    if redirect:
+        return redirect
+    if detect_record_type(material_id) != "material":
+        return HTMLResponse("Material not found.", status_code=404)
+    if not material_found(request, material_id):
+        return HTMLResponse("Material not found.", status_code=404)
+    return templates.TemplateResponse(
+        request,
+        "synthesis.html",
+        {
+            "material": material_summaries([material_id])[0],
+            "step_types": STEP_TYPES,
+            "full_name": current_user(request).get("full_name"),
+        },
+    )
 
 
 @router.get("/api/materials/{material_id}/synthesis")
