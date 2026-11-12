@@ -238,9 +238,7 @@ def add_step(material_id: str, values: dict) -> dict:
         conn.commit()
     except errors.UniqueViolation:
         conn.rollback()
-        raise SynthesisError(
-            duplicate_message(material_id, step["step_no"])
-        ) from None
+        raise SynthesisError(duplicate_message(material_id, step["step_no"])) from None
     except Exception:
         conn.rollback()
         raise

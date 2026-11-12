@@ -133,7 +133,9 @@ def material():
     try:
         yield TEST_MATERIAL
     finally:
-        cur.execute("DELETE FROM tbl_materials WHERE material_id = %s", (TEST_MATERIAL,))
+        cur.execute(
+            "DELETE FROM tbl_materials WHERE material_id = %s", (TEST_MATERIAL,)
+        )
         conn.commit()
         cur.close()
         conn.close()
