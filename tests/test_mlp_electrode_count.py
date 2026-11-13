@@ -13,9 +13,12 @@ from pathlib import Path
 
 import psycopg2
 import pytest
+from fastapi.testclient import TestClient
 from psycopg2 import OperationalError
 
+import main
 from core.db import get_connection
+from services.cards import fetch_card_record
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -126,3 +129,19 @@ def test_anode_cannot_be_set(cur):
             "anode_count) VALUES (%s, %s, %s, %s)",
             (MLP_ID, CATHODE_COATING, ANODE_COATING, 5),
         )
+
+
+def test_card_shows_counts(cur):
+    insert_mlp(cur, 3)
+    record, _ = fetch_card_record(cur, "mlp", MLP_ID)
+    assert record["Cathodes"] == 3
+    assert record["Anodes"] == 4
+
+
+def test_new_mlp_form_has_cathode_input():
+    client = TestClient(main.app, follow_redirects=False)
+    response = client.post("/login", data={"username": "dev", "password": "dev"})
+    assert response.status_code == 303, "dev login failed - is the dev seed loaded?"
+    page = client.get("/mlp/new").text
+    assert 'name="cathode_count"' in page
+    assert 'id="anode_count"' in page
