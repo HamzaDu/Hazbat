@@ -69,7 +69,9 @@ CREATE TABLE IF NOT EXISTS tbl_mlp (
     date_made             DATE,
     electrolyte           TEXT,
     cell_capacity         NUMERIC,
-    ac_area_ratio         NUMERIC
+    ac_area_ratio         NUMERIC,
+    cathode_count         INTEGER NOT NULL DEFAULT 1 CHECK (cathode_count BETWEEN 1 AND 100),
+    anode_count           INTEGER GENERATED ALWAYS AS (cathode_count + 1) STORED
 );
 
 CREATE TABLE IF NOT EXISTS tbl_users (
