@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ material.material_id }} — Synthesis route{% endblock %}
+{% block content %}
+{#- Steps are loaded and saved by static/js/synthesis.js through /api/materials/{id}/synthesis. -#}
+<p class="muted"><a href="/card/{{ material.material_id }}">&larr; {{ material.material_id }} card</a></p>
+<h1>Synthesis route — <span class="mono">{{ material.material_id }}</span></h1>
+<p class="muted">{{ material.chemistry | dash }} · {{ material.supplier | dash }}</p>
+
+<div id="synthesis" data-material-id="{{ material.material_id }}" data-performed-by="{{ full_name or '' }}">
+    <div class="result">
+        <h4 style="margin-top: 0;">Steps</h4>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f5f8fc; text-align: left;">
+                    <th style="padding: 8px; border-bottom: 2px solid #ccc;">#</th>
+                    <th style="padding: 8px; border-bottom: 2px solid #ccc;">Type</th>
+                    <th style="padding: 8px; border-bottom: 2px solid #ccc;">Temp (°C)</th>
+                    <th style="padding: 8px; border-bottom: 2px solid #ccc;">Duration (h)</th>
+                    <th style="padding: 8px; border-bottom: 2px solid #ccc;">Atmosphere</th>
+                    <th style="padding: 8px; border-bottom: 2px solid #ccc;">Equipment</th>
+                    <th style="padding: 8px; border-bottom: 2px solid #ccc;">By</th>
+                    <th style="padding: 8px; border-bottom: 2px solid #ccc;">On</th>
+                    <th style="padding: 8px; border-bottom: 2px solid #ccc;">Notes</th>
+                    <th style="padding: 8px; border-bottom: 2px solid #ccc;"></th>
+                </tr>
+            </thead>
+            <tbody data-steps></tbody>
+        </table>
+        <p class="muted" data-empty hidden>No steps yet.</p>
+    </div>
+
+    <form class="result" data-step-form novalidate>
+        <h4 style="margin-top: 0;" data-form-title>Add a step</h4>
+        <div class="form-grid">
+            <div>
+                <label for="step_no">Step number</label>
+                <input type="number" id="step_no" name="step_no" min="1" step="1" placeholder="Next">
+            </div>
+            <div>
+                <label for="step_type">Step type</label>
+                <input type="text" id="step_type" name="step_type" list="step_types" required>
+                <datalist id="step_types">
+                    {% for step_type in step_types %}<option value="{{ step_type }}">{% endfor %}
+                </datalist>
+            </div>
+            <div>
+                <label for="temperature_c">Temperature (°C)</label>
+                <input type="number" id="temperature_c" name="temperature_c" min="-273" max="2000" step="any">
+            </div>
+            <div>
+                <label for="duration_h">Duration (h)</label>
+                <input type="number" id="duration_h" name="duration_h" min="0" step="any">
+            </div>
+            <div>
+                <label for="atmosphere">Atmosphere</label>
+                <input type="text" id="atmosphere" name="atmosphere" placeholder="air, O2, Ar, N2">
+            </div>
+            <div>
+                <label for="equipment">Equipment</label>
+                <input type="text" id="equipment" name="equipment">
+            </div>
+            <div>
+                <label for="performed_by">Performed by</label>
+                <input type="text" id="performed_by" name="performed_by">
+            </div>
+            <div>
+                <label for="performed_on">Performed on</label>
+                <input type="date" id="performed_on" name="performed_on">
+            </div>
+            <div class="field-wide">
+                <label for="notes">Notes</label>
+                <textarea id="notes" name="notes" rows="3"></textarea>
+            </div>
+        </div>
+        <button type="submit" data-save>Save step</button>
+        <button type="button" style="background: #6b7280;" data-cancel hidden>Cancel</button>
+        <p class="error" data-error hidden></p>
+        <p class="success" data-success hidden></p>
+    </form>
+</div>
+<script src="/static/js/synthesis.js" defer></script>
+{% endblock %}

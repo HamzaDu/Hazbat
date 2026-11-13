@@ -91,6 +91,14 @@ async def get_lineage(record_id: str, ctx: Context) -> dict:
     return await get_json(ctx, record_path("/api/lineage", record_id))
 
 
+@mcp_server.tool()
+async def get_synthesis_steps(material_id: str, ctx: Context) -> dict:
+    """Synthesis steps of one material, in order: type, temperature, duration,
+    atmosphere, equipment and who did it when.
+    """
+    return await get_json(ctx, record_path("/api/materials", material_id, "/synthesis"))
+
+
 RECORD_TYPES = ("materials", "coatings", "slp", "coincell", "mlp")
 
 
