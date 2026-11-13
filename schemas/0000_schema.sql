@@ -69,7 +69,9 @@ CREATE TABLE IF NOT EXISTS tbl_mlp (
     date_made             DATE,
     electrolyte           TEXT,
     cell_capacity         NUMERIC,
-    ac_area_ratio         NUMERIC
+    ac_area_ratio         NUMERIC,
+    cathode_count         INTEGER NOT NULL DEFAULT 1 CHECK (cathode_count BETWEEN 1 AND 100),
+    anode_count           INTEGER GENERATED ALWAYS AS (cathode_count + 1) STORED
 );
 
 CREATE TABLE IF NOT EXISTS tbl_users (
@@ -169,4 +171,25 @@ CREATE INDEX IF NOT EXISTS idx_material_coa_material ON tbl_material_coa (materi
 
 INSERT INTO tbl_unprivileged_tables (table_name) VALUES
     ('tbl_material_coa')
+ON CONFLICT (table_name) DO NOTHING;
+
+-- Synthesis steps for a material, in order. step_no starts at 1.
+-- The UNIQUE constraint's index also serves lookups by material.
+CREATE TABLE IF NOT EXISTS tbl_material_synthesis_step (
+    step_id         SERIAL PRIMARY KEY,
+    material_id     TEXT NOT NULL REFERENCES tbl_materials(material_id) ON DELETE CASCADE,
+    step_no         INTEGER NOT NULL CHECK (step_no > 0),
+    step_type       TEXT NOT NULL,
+    temperature_c   NUMERIC CHECK (temperature_c BETWEEN -273 AND 2000),
+    duration_h      NUMERIC CHECK (duration_h > 0),
+    atmosphere      TEXT,
+    equipment       TEXT,
+    notes           TEXT,
+    performed_by    TEXT,
+    performed_on    DATE,
+    UNIQUE (material_id, step_no)
+);
+
+INSERT INTO tbl_unprivileged_tables (table_name) VALUES
+    ('tbl_material_synthesis_step')
 ON CONFLICT (table_name) DO NOTHING;

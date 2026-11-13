@@ -31,6 +31,9 @@
         {% if record_type in ("slp", "coincell", "mlp") %}
         <a href="/card/{{ record_id }}/lineage" style="display: inline-block; margin-top: 6px; font-size: 14px; font-weight: 600; color: #2e5fa3;">Open lineage &amp; passport card →</a>
         {% endif %}
+        {% if record_type == "material" %}
+        <a href="/materials/{{ record_id }}/synthesis" style="display: inline-block; margin-top: 6px; font-size: 14px; font-weight: 600; color: #2e5fa3;">Synthesis route →</a>
+        {% endif %}
             <div class="card-logo"><img src="/static/img/wmg-black.png" alt="WMG, University of Warwick"></div>
     </div>
 </div>

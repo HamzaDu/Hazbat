@@ -79,6 +79,8 @@ CARD_FIELDS = {
             ("cell_capacity", "Cell Capacity"),
             ("electrolyte", "Electrolyte"),
             ("ac_area_ratio", "A/C Area Ratio"),
+            ("cathode_count", "Cathodes"),
+            ("anode_count", "Anodes"),
         ],
     ),
 }
