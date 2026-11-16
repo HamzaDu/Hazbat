@@ -1,8 +1,8 @@
-from utils.config import ConfigFile
+from utils.config import ConfigFile, get_config_path
 
 
 class VariableRegistry:
-    def __init__(self, path="/etc/hazbat/hazbat.ini"):
+    def __init__(self, path=get_config_path()):
         self.path = path
         self.sections = ConfigFile.load(path).as_dict()
 

@@ -12,11 +12,7 @@ import string
 import psycopg2
 from psycopg2 import sql
 
-from utils.config import ConfigFile, truthy
-
-
-def config_path():
-    return "/etc/hazbat/hazbat.ini"
+from utils.config import ConfigFile, truthy, get_config_path
 
 
 def generate_password():
@@ -98,7 +94,7 @@ def set_up_admin_role(password):
 
 
 def main():
-    path = config_path()
+    path = get_config_path()
     config = ConfigFile.load(path)
     changed = add_missing_app(config)
     local = os.getenv("START_LOCAL_DB")
