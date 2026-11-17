@@ -4,7 +4,7 @@ from utils.config import ConfigFile, get_config_path
 class VariableRegistry:
     def __init__(self, path=None):
         self.path = path or get_config_path()
-        self.sections = ConfigFile.load(path).as_dict()
+        self.sections = ConfigFile.load(self.path).as_dict()
 
     def __getitem__(self, section):
         """The section's names and values, as a dict. Raises KeyError if there
