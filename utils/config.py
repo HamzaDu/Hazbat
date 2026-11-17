@@ -23,6 +23,8 @@ import os
 import shutil
 
 DEFAULT_CONFIG_PATH = "/etc/hazbat/hazbat.ini"
+
+
 def get_config_path():
     """Returns the path to the config file. Can be overridden by an environment
     variable.

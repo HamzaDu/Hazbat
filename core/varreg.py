@@ -2,8 +2,8 @@ from utils.config import ConfigFile, get_config_path
 
 
 class VariableRegistry:
-    def __init__(self, path=get_config_path()):
-        self.path = path
+    def __init__(self, path=None):
+        self.path = path or get_config_path()
         self.sections = ConfigFile.load(path).as_dict()
 
     def __getitem__(self, section):

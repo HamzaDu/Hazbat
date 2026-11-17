@@ -12,7 +12,7 @@ import string
 import psycopg2
 from psycopg2 import sql
 
-from utils.config import ConfigFile, truthy, get_config_path
+from utils.config import ConfigFile, get_config_path, truthy
 
 
 def generate_password():
