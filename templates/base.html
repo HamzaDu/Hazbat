@@ -126,6 +126,7 @@
 
         <a href="/chart" class="{{ 'active' if request.url.path == '/chart' else '' }}">Chart</a>
         <a href="/graph" class="{{ 'active' if request.url.path == '/graph' else '' }}">Graph</a>
+        <a href="/mixing" class="{{ 'active' if request.url.path == '/mixing' else '' }}">Mixing</a>
         {% if request.session.get('is_admin') %}
         <div style="position: relative;" class="nav-dropdown">
             <span style="cursor: pointer; color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 500;">Users ▾</span>

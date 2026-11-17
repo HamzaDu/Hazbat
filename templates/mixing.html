@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Mixing — BMAC{% endblock %}
+{% block content %}
+<style>
+/* This page is wider than the default 1000px, like the traceability graph */
+main { max-width: 1640px; }
+
+.mx-layout { display: flex; gap: 16px; margin-top: 16px; align-items: flex-start; }
+.mx-side {
+    width: 300px; flex-shrink: 0; position: sticky; top: 20px; margin-top: 0;
+    max-height: calc(100vh - 48px); overflow-y: auto;
+}
+.mx-main { flex: 1; min-width: 0; }
+
+/* Section headings, as in the graph's filter panel */
+.mx-head {
+    font-size: 11px; font-weight: 700; color: #999; letter-spacing: 0.06em;
+    margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center;
+}
+.mx-sep { border: none; border-top: 1px solid #eee; margin: 14px 0; }
+
+/* Run list */
+.mx-run {
+    display: block; padding: 7px 9px; margin-bottom: 4px; border-radius: 8px;
+    border: 1px solid #dde2ee; text-decoration: none; color: #1a1a2e; font-size: 12px;
+}
+.mx-run:hover { background: #f0f4fb; }
+.mx-run.active { background: #eaf0f8; border-color: #2e5fa3; }
+.mx-run b { display: block; font-size: 13px; color: #1b3a6b; }
+.mx-run span { color: #777; }
+.mx-none { font-size: 12px; color: #777; margin: 0; }
+
+/* Add-a-run form */
+.mx-side details > summary { cursor: pointer; list-style: none; }
+.mx-side details > summary::-webkit-details-marker { display: none; }
+.mx-side label { margin-top: 10px; font-size: 12px; }
+.mx-side input, .mx-side select, .mx-side textarea { padding: 7px 8px; font-size: 12px; border-radius: 6px; }
+.mx-side .mx-ing { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 8px; margin-top: 8px;
+                   border: 1px solid #eef0f6; border-radius: 8px; background: #fafbfe; }
+.mx-side .mx-ing-row2 { display: grid; grid-template-columns: 1fr 78px; gap: 4px; }
+.mx-side .mx-ing select, .mx-side .mx-ing input { margin-top: 0; }
+.mx-side button.mx-small {
+    margin: 8px 0 0; padding: 6px 10px; font-size: 12px; background: #eaf0f8; color: #1b3a6b;
+}
+.mx-side button.mx-small:hover { background: #dbe6f5; }
+.mx-side button.mx-save { width: 100%; margin-top: 16px; }
+.mx-note { font-size: 11px; color: #888; margin: 4px 0 0; }
+
+/* The dark canvas, as on the traceability graph */
+.mx-dark {
+    position: relative; background: #0a0e1a; border-radius: 14px; color: #e8e8f0;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3); padding: 14px 16px 16px; min-height: 720px;
+}
+.mx-tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.mx-tab {
+    margin: 0; padding: 7px 16px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    background: rgba(255,255,255,0.06); color: #9aa6c7; border: 1px solid rgba(255,255,255,0.12);
+}
+.mx-tab:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.mx-tab.active { background: rgba(0,229,255,0.14); color: #00e5ff; border-color: #00e5ff; }
+.mx-title { font-size: 13px; color: #9aa6c7; margin: 0 0 6px; }
+.mx-view { position: relative; height: 640px; }
+.mx-view[hidden] { display: none; }
+.mx-view canvas { max-width: 100%; }
+.mx-caption { font-size: 12px; color: #9aa6c7; margin: 8px 0 0; }
+.mx-empty {
+    position: absolute; inset: 70px 0 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; color: #9aa6c7; font-size: 15px; padding: 0 40px;
+}
+.mx-empty[hidden] { display: none; }
+#mxNetwork { width: 100%; height: 100%; }
+.mx-model-bar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.mx-dark button.mx-train {
+    margin: 0; padding: 8px 18px; font-size: 13px; background: #00e5ff; color: #0a0e1a;
+}
+.mx-dark button.mx-train:hover { background: #7df3ff; }
+.mx-chip {
+    display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: rgba(255,255,255,0.08); color: #e8e8f0; margin-right: 6px;
+}
+.mx-chip.good { background: rgba(0,255,157,0.15); color: #00ff9d; }
+.mx-model-grid { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 300px 260px; gap: 14px; }
+.mx-model-grid .wide { grid-column: 1 / -1; }
+.mx-model-grid > div { position: relative; }
+
+/* Right-hand summary reuses .node-panel from hazbat.css */
+#mxPanel { max-height: calc(100vh - 48px); overflow-y: auto; }
+#mxPanel h4 { margin: 14px 0 6px; font-size: 12px; color: var(--hz-navy); letter-spacing: 0.04em; }
+#mxPanel .mx-list { font-size: 13px; }
+#mxPanel .mx-list div { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+#mxPanel a { color: var(--hz-blue); text-decoration: none; font-weight: 600; }
+.mx-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+</style>
+
+<h1 style="margin: 0;">Mixing</h1>
+<p style="margin: 4px 0 0; color: #999; font-size: 14px;">Upload a mixer log, see how the slurry was made and what it fed, and try a model of the mixer's power draw</p>
+{% if saved %}<p class="success">Saved. The run is shown below.</p>{% endif %}
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+<div class="mx-layout" id="mixingApp" data-selected="{{ selected or '' }}">
+
+    <!-- Inputs: the runs, and a form to add one -->
+    <aside class="result mx-side">
+        <div class="mx-head">MIXING RUNS</div>
+        {% if runs %}
+        <div id="mxRuns">
+            {% for r in runs %}
+            <a class="mx-run" href="/mixing?run={{ r.mixing_id }}" data-id="{{ r.mixing_id }}">
+                <b>{{ r.mixing_id }}</b>
+                <span>{{ r.project or '—' }} · {{ (r.started_at or '')[:16].replace('T', ' ') or 'no date' }}{% if r.duration_s %} · {{ (r.duration_s // 60) }} min{% endif %}</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="mx-none">No runs yet.</p>
+        {% endif %}
+
+        <hr class="mx-sep">
+        <details {% if error or not runs %}open{% endif %}>
+            <summary class="mx-head">ADD A MIXING RUN <span>▾</span></summary>
+            <form method="post" action="/mixing" enctype="multipart/form-data">
+                <label for="mxFile">Mixer log (.xlsx)</label>
+                <input type="file" id="mxFile" name="file" accept=".xlsx" required>
+                <p class="mx-note">Eirich export: one row per second, with the energy summary in columns P–Q.</p>
+
+                <label for="mxId">Mixing ID</label>
+                <input type="text" id="mxId" name="mixing_id" value="{{ form.mixing_id or default_id }}" required pattern="MIX-[A-Za-z0-9_\-]{1,40}">
+
+                <label for="mxProject">Project</label>
+                <select id="mxProject" name="project" required>
+                    <option value="">Choose…</option>
+                    {% for p in projects %}
+                    <option value="{{ p }}" {% if form.project == p %}selected{% endif %}>{{ p }}</option>
+                    {% endfor %}
+                </select>
+
+                <label for="mxBy">Made by</label>
+                <input type="text" id="mxBy" name="made_by" value="{{ form.made_by if 'made_by' in form else full_name }}">
+
+                <label for="mxCoating">Coating made from this slurry <span style="font-weight:400;color:#888">(optional)</span></label>
+                <select id="mxCoating" name="coating_id">
+                    <option value="">None yet</option>
+                    {% for c in coatings %}
+                    <option value="{{ c.id }}" {% if form.coating_id == c.id %}selected{% endif %}>{{ c.id }}{% if c.label %} — {{ c.label }}{% endif %}</option>
+                    {% endfor %}
+                </select>
+
+                <label>Ingredients <span style="font-weight:400;color:#888">(optional)</span></label>
+                <div id="mxIngredients">
+                    {% set rows = form.ingredients if form.ingredients else [{}, {}, {}] %}
+                    {% for ing in rows %}
+                    <div class="mx-ing">
+                        <select name="ingredient_material" aria-label="Material">
+                            <option value="">Material…</option>
+                            {% for m in materials %}
+                            <option value="{{ m.id }}" {% if ing.material == m.id %}selected{% endif %}>{{ m.id }}{% if m.label %} — {{ m.label }}{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="mx-ing-row2">
+                            <select name="ingredient_role" aria-label="Role">
+                                <option value="">Role…</option>
+                                {% for r in roles %}
+                                <option value="{{ r }}" {% if ing.role == r %}selected{% endif %}>{{ r }}</option>
+                                {% endfor %}
+                            </select>
+                            <input type="number" name="ingredient_mass" step="any" min="0" placeholder="g" aria-label="Mass in grams" value="{{ ing.mass or '' }}">
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" class="mx-small" id="mxAddIngredient">+ Add ingredient</button>
+
+                <label for="mxNotes">Notes <span style="font-weight:400;color:#888">(optional)</span></label>
+                <textarea id="mxNotes" name="notes" rows="2">{{ form.notes or '' }}</textarea>
+
+                <button type="submit" class="mx-save">Save mixing run</button>
+            </form>
+        </details>
+    </aside>
+
+    <!-- Charts: dark canvas like the traceability graph -->
+    <div class="mx-main">
+        <div class="mx-dark">
+            <div class="mx-tabs" role="tablist" aria-label="Views">
+                <button type="button" class="mx-tab active" data-view="trace" role="tab">Power trace</button>
+                <button type="button" class="mx-tab" data-view="stages" role="tab">Stages</button>
+                <button type="button" class="mx-tab" data-view="lineage" role="tab">Slurry lineage</button>
+                <button type="button" class="mx-tab" data-view="model" role="tab">Model</button>
+            </div>
+
+            <div class="mx-view" id="view-trace"><canvas id="cTrace"></canvas></div>
+            <div class="mx-view" id="view-stages" hidden>
+                <canvas id="cStages"></canvas>
+            </div>
+            <div class="mx-view" id="view-lineage" hidden><div id="mxNetwork"></div></div>
+            <div class="mx-view" id="view-model" hidden style="height: auto; min-height: 640px;">
+                <div class="mx-model-bar">
+                    <button type="button" class="mx-train" id="mxTrain">Train model on all runs</button>
+                    <span id="mxModelStats"></span>
+                </div>
+                <div class="mx-model-grid">
+                    <div class="wide"><canvas id="cModelTrace"></canvas></div>
+                    <div><canvas id="cModelScatter"></canvas></div>
+                    <div><canvas id="cModelImportance"></canvas></div>
+                </div>
+                <p class="mx-caption" id="mxModelNote">The model predicts the mixer's power draw from the rotor speed, the time in the stage, the pause before it, the energy used so far and the stage number. Each stage is predicted by a model that never saw it.</p>
+            </div>
+
+            <p class="mx-caption" id="mxCaption"></p>
+            <div class="mx-empty" id="mxEmpty">{% if runs %}Choose a mixing run on the left.{% else %}No mixing runs yet. Add one with the form on the left.{% endif %}</div>
+            <img class="graph-watermark" src="/static/img/wmg-white.png" alt="" aria-hidden="true">
+        </div>
+    </div>
+
+    <!-- Summary of the chosen run: filled in by static/js/mixing.js -->
+    <aside id="mxPanel" class="result node-panel" hidden aria-live="polite"></aside>
+</div>
+
+<script src="/static/js/mixing.js"></script>
+{% endblock %}

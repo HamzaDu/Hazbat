@@ -15,3 +15,4 @@ galvani  # reads BioLogic .mpr cycling files
 pyotp>=2.9.0
 cryptography>=42.0.0
 mcp==1.30.0
+scikit-learn>=1.4
