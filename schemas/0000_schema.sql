@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS tbl_mlp (
     electrolyte           TEXT,
     cell_capacity         NUMERIC,
     ac_area_ratio         NUMERIC,
-    cathode_count         INTEGER NOT NULL DEFAULT 1 CHECK (cathode_count BETWEEN 1 AND 100),
+    cathode_count         INTEGER CHECK (cathode_count BETWEEN 1 AND 100),  -- NULL = not recorded
     anode_count           INTEGER GENERATED ALWAYS AS (cathode_count + 1) STORED
 );
 
@@ -192,6 +192,7 @@ CREATE TABLE IF NOT EXISTS tbl_material_synthesis_step (
 
 INSERT INTO tbl_unprivileged_tables (table_name) VALUES
     ('tbl_material_synthesis_step')
+ON CONFLICT (table_name) DO NOTHING;
 -- Mixing (slurry) runs: the run, its ingredients, its stages and the 1 Hz mixer log.
 -- A coating points at the slurry it was made from (tbl_coating.mixing_id).
 CREATE TABLE IF NOT EXISTS tbl_mixing_run (

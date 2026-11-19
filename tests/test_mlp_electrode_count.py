@@ -88,8 +88,9 @@ def insert_mlp(cur, cathode_count=None):
     return cur.fetchone()
 
 
-def test_default_is_one(cur):
-    assert insert_mlp(cur) == (1, 2)
+def test_not_recorded_by_default(cur):
+    # Cells added without a count (old records) stay NULL, not a made-up 1.
+    assert insert_mlp(cur) == (None, None)
 
 
 @pytest.mark.parametrize("cathodes", [1, 7, 100])
@@ -113,13 +114,13 @@ def test_out_of_range_rejected(cur, cathodes):
         insert_mlp(cur, cathodes)
 
 
-def test_null_rejected(cur):
-    with pytest.raises(psycopg2.errors.NotNullViolation):
-        cur.execute(
-            "INSERT INTO tbl_mlp (mlp_id, cat_coating_id, an_coating_id, "
-            "cathode_count) VALUES (%s, %s, %s, NULL)",
-            (MLP_ID, CATHODE_COATING, ANODE_COATING),
-        )
+def test_null_allowed(cur):
+    cur.execute(
+        "INSERT INTO tbl_mlp (mlp_id, cat_coating_id, an_coating_id, "
+        "cathode_count) VALUES (%s, %s, %s, NULL) RETURNING anode_count",
+        (MLP_ID, CATHODE_COATING, ANODE_COATING),
+    )
+    assert cur.fetchone() == (None,)
 
 
 def test_anode_cannot_be_set(cur):

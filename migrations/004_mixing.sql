@@ -1,6 +1,6 @@
 -- Mixing (slurry) data: one run, its ingredients, its stages and the 1 Hz mixer log.
 -- A coating points at the slurry it was made from. For an existing database run once:
---   gosu postgres psql -d bmac -v ON_ERROR_STOP=1 -f migrations/005_mixing.sql
+--   gosu postgres psql -d bmac -v ON_ERROR_STOP=1 -f migrations/004_mixing.sql
 -- (new databases get this from schemas/0000_schema.sql; renumber the file to the next free number)
 
 CREATE TABLE IF NOT EXISTS tbl_mixing_run (
