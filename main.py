@@ -33,6 +33,7 @@ from routers import (
     projects,
     records,
     records_edit,
+    synthesis,
     two_factor,
     users,
 )
@@ -68,6 +69,7 @@ for module in (
     projects,
     records,
     records_edit,
+    synthesis,
     two_factor,
     users,
 ):

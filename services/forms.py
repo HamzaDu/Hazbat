@@ -4,6 +4,8 @@ Cleans optional form values, inserts rows and fills the dropdown lists.
 Tables: tbl_materials, tbl_coating, tbl_projects (read), any table (insert_record).
 """
 
+import re
+
 import psycopg2
 
 from core.db import get_connection
@@ -18,6 +20,11 @@ FIELD_LABELS = {
     "ac_area_ratio": "A/C area ratio",
     "gsm": "GSM",
 }
+
+# Cathodes per MLP cell. The database CHECK on tbl_mlp.cathode_count matches.
+DEFAULT_CATHODES = 1
+MIN_CATHODES = 1
+MAX_CATHODES = 100
 
 
 def clean_optional_fields(values: dict, numeric_fields=()):
@@ -40,6 +47,24 @@ def clean_optional_fields(values: dict, numeric_fields=()):
         else:
             cleaned[field] = value
     return cleaned, None
+
+
+def parse_cathode_count(value):
+    """Number of cathodes in an MLP from a form or spreadsheet cell: blank -> 1.
+    Returns (count, None) or (None, error_message)."""
+    value = (value or "").strip()
+    if value == "":
+        return DEFAULT_CATHODES, None
+    error = (
+        f"Number of cathodes must be a whole number from {MIN_CATHODES} to "
+        f"{MAX_CATHODES} (got '{value}')."
+    )
+    if not re.fullmatch(r"[0-9]+", value):
+        return None, error
+    count = int(value)
+    if count < MIN_CATHODES or count > MAX_CATHODES:
+        return None, error
+    return count, None
 
 
 def insert_record(table: str, data: dict):

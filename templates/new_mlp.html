@@ -23,6 +23,11 @@
             {% if not an_coatings %}<p class="hint">No anode (AN-) coatings yet. <a href="/coatings/new">Create one first</a>.</p>{% endif %}
         </div>
         <div class="field">
+            <label for="cathode_count">Number of Cathodes</label>
+            <input type="number" id="cathode_count" name="cathode_count" min="1" max="100" step="1" value="{{ f.get("cathode_count") or 1 }}" required>
+            <p class="hint">Anodes: <span id="anode_count">2</span> (always one more than the cathodes)</p>
+        </div>
+        <div class="field">
             <label for="project">Project</label>
             <select id="project" name="project" required>
                 <option value="" disabled {% if not f.get("project") %}selected{% endif %}>Choose a project…</option>
@@ -58,4 +63,16 @@
 
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if success %}<p class="success">Created {{ success }} successfully.</p>{% endif %}
+
+<script>
+    // Anodes are always one more than cathodes
+    const cathodes = document.getElementById('cathode_count');
+    const anodes = document.getElementById('anode_count');
+    const showAnodes = () => {
+        const n = Number(cathodes.value);
+        anodes.textContent = Number.isInteger(n) && n >= 1 && n <= 100 ? n + 1 : '—';
+    };
+    cathodes.addEventListener('input', showAnodes);
+    showAnodes();
+</script>
 {% endblock %}

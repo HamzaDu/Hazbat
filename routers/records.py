@@ -27,6 +27,7 @@ from services.forms import (
     form_state,
     insert_record,
     load_form_options,
+    parse_cathode_count,
     record_exists,
 )
 from services.records import project_visible
@@ -618,6 +619,7 @@ def submit_mlp_form(
     electrolyte: str = Form(None),
     cell_capacity: str = Form(None),
     ac_area_ratio: str = Form(None),
+    cathode_count: str = Form(None),
 ):
     """Check and save a new MLP cell (needs one cathode and one anode coating)."""
     redirect = require_login(request)
@@ -635,7 +637,7 @@ def submit_mlp_form(
         "cell_capacity": cell_capacity,
         "ac_area_ratio": ac_area_ratio,
     }
-    form = form_state(required, optional)
+    form = form_state(required, optional, {"cathode_count": cathode_count})
     error = None
     success = None
 
@@ -657,7 +659,11 @@ def submit_mlp_form(
             optional, numeric_fields={"cell_capacity", "ac_area_ratio"}
         )
         if not error:
-            error = insert_record("tbl_mlp", {**required, **extras})
+            cathodes, error = parse_cathode_count(cathode_count)
+        if not error:
+            error = insert_record(
+                "tbl_mlp", {**required, **extras, "cathode_count": cathodes}
+            )
         if not error:
             success, form = mlp_id, {}
 

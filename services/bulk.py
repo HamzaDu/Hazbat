@@ -15,6 +15,7 @@ from services.forms import (
     clean_optional_fields,
     coating_electrode,
     insert_record,
+    parse_cathode_count,
     record_exists,
 )
 from services.records import project_visible
@@ -33,6 +34,7 @@ DATE_FORMATS = (
 
 # Required + optional columns for each table's bulk upload. "aliases" lets older
 # spreadsheets keep working (e.g. a "GSM" column on the coatings sheet).
+# "integer" maps a whole-number column to the function that checks it.
 BULK_SPECS = {
     "tbl_materials": {
         "id": "material_id",
@@ -40,6 +42,7 @@ BULK_SPECS = {
         "numeric": ["quantity_kg"],
         "dates": ["date_received"],
         "text": ["location", "availability", "notes"],
+        "integer": {},
         "aliases": {},
     },
     "tbl_coating": {
@@ -48,6 +51,7 @@ BULK_SPECS = {
         "numeric": ["coat_weight_gsm", "porosity"],
         "dates": ["coating_date"],
         "text": ["notes"],
+        "integer": {},
         "aliases": {
             "gsm": "coat_weight_gsm",
             "coat_weight": "coat_weight_gsm",
@@ -61,6 +65,7 @@ BULK_SPECS = {
         "numeric": ["formation_capacity", "np_ratio"],
         "dates": ["date_made"],
         "text": ["electrolyte", "notes"],
+        "integer": {},
         "aliases": {
             "n_p_ratio": "np_ratio",
             "formation_capacity_mah": "formation_capacity",
@@ -72,6 +77,7 @@ BULK_SPECS = {
         "numeric": ["formation_capacity", "gsm"],
         "dates": ["date_made"],
         "text": ["electrolyte", "cell_type", "notes"],
+        "integer": {},
         "aliases": {"gsm_g_m": "gsm", "formation_capacity_mah": "formation_capacity"},
     },
     "tbl_mlp": {
@@ -80,7 +86,12 @@ BULK_SPECS = {
         "numeric": ["cell_capacity", "ac_area_ratio"],
         "dates": ["date_made"],
         "text": ["electrolyte"],
-        "aliases": {"a_c_area_ratio": "ac_area_ratio"},
+        "integer": {"cathode_count": parse_cathode_count},
+        "aliases": {
+            "a_c_area_ratio": "ac_area_ratio",
+            "cathodes": "cathode_count",
+            "number_of_cathodes": "cathode_count",
+        },
     },
 }
 
@@ -130,7 +141,13 @@ def process_bulk_upload(rows, table: str, allowed, check=None):
     "ignored": [...unknown columns]}.
     """
     spec = BULK_SPECS[table]
-    known = spec["required"] + spec["numeric"] + spec["dates"] + spec["text"]
+    known = (
+        spec["required"]
+        + spec["numeric"]
+        + spec["dates"]
+        + spec["text"]
+        + list(spec["integer"])
+    )
     success, failed, ignored = [], [], set()
 
     for i, raw in enumerate(rows):
@@ -196,6 +213,14 @@ def process_bulk_upload(rows, table: str, allowed, check=None):
         extras, error = clean_optional_fields(
             optional, numeric_fields=set(spec["numeric"])
         )
+        if error:
+            failed.append({"row": row_num, "reason": error})
+            continue
+
+        for field, parse in spec["integer"].items():
+            extras[field], error = parse(values.get(field))
+            if error:
+                break
         if error:
             failed.append({"row": row_num, "reason": error})
             continue
